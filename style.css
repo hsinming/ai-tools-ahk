@@ -1,9 +1,10 @@
-:root{
+﻿:root{
     --link: #00ACAF;
     --link-hover: cyan;
     --link-special: orange;
     --link-visited: #006bcf;
     --text: #999;
+    --code-txt: #DDD;
     --header: #00ACAF;
     --border: #00ACAF;
     --blockquote: #0000FF;
@@ -39,13 +40,13 @@ body {
 }
 
 #main {
-    /* max-width: 1280px; */
+    max-width: 1280px;
     margin: auto;
-    /* height: 90%; */
-    padding: 5px 5px;
-    /* overflow-y: scroll; */
-    /* border-left: 1px solid var(--border);
-    border-right: 1px solid var(--border); */
+    height: 90%;
+    padding: 45px 45px;
+    overflow-y: scroll;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
 }
 
 #toc-container {
@@ -106,6 +107,11 @@ body {
     color: cyan;
 }
 
+a, a:link { color: var(--link); }
+a:hover { color: var(--link-hover); text-decoration: underline; }
+a:visited { color: var(--link); }
+a:visited:hover { color: var(--link-hover); }
+
 :target a:visited { color: var(--so4); }
 :target a:visited:hover, :target a:visited:hover .link { color: var(--link-hover); }
 :target.underline { border-color: var(--so4); }
@@ -118,12 +124,8 @@ table.normal tr td { background: var(--bg2); }
 table.normal tr th, table tr td { padding: 5px; }
 table.normal tr:hover td { background: var(--row-HL); }
 
-a, a:link { color: var(--link); }
-a:hover { color: var(--link-hover); text-decoration: underline; }
-a:visited { color: var(--link); }
-
 h1, h2, h3, h4, h5, h6
-{ font-weight:bold; color:var(--header); margin-top: 24px; margin-bottom: 0.5em; }
+{ font-weight:bold; color:var(--header); margin-top: 24px; margin-bottom: 0; }
 
 h1 a, h2 a, h3 a, h4 a, h5 a, h6 a,
 h1:hover a, h2:hover a, h3:hover a, h4:hover a, h5:hover a, h6:hover a
@@ -147,12 +149,16 @@ h5.underline { padding-bottom: 2px; }
 h1 { font-size:1.75em; padding-bottom: 10px;}
 h2 { font-size:1.5em;  padding-bottom: 8px;}
 h3 { font-size:1.30em; padding-bottom: 6px;}
-h4 { font-size:1.15em; padding-bottom: 4px;}
-h5 { font-size:1em;    padding-bottom: 2px;}
+h4 { font-size:1.15em; padding-bottom: 0px;}
+h5 { font-size:1em;    padding-bottom: 0px;}
 h6 { font-size:0.75em; }
 
-em, strong { color: var(--emphasis); }
+/* em, strong { color: var(--emphasis); } */
+
+strong { font-weight: 800; }
+
 del { font-weight: 400; }
+
 hr {
     color: transparent;
     border-top-style: solid;
@@ -176,14 +182,27 @@ pre {
     margin-bottom: 1.5em;
     background-color: var(--b1-5);
     padding: 2px 4px;
-    border: 1px solid var(--so1);
+    border: 1px solid var(--border);
     border-radius: 5px;
     font-family: Consolas;
     font-size: [_font_size_]px;
 }
 
 code {
+    color: var(--code-txt);
     margin: 0px 3px 0px 0px;
+    padding: 2px 4px;
+    background-color: var(--b1-5);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-family: Consolas;
+    font-size: [_font_size_]px;
+    font-weight: 100;
+}
+
+.box {
+    color: var(--code-txt);
+    margin: 0px 3px 0px 3px;
     padding: 2px 4px;
     background-color: var(--b1-5);
     border: 1px solid var(--border);

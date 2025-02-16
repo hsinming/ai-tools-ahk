@@ -1,5 +1,5 @@
 settings.ini
-settings.ini.x
+settings*.ini
 AI-Tools.exe
 *.log
 .vscode/settings.json
