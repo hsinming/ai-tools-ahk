@@ -1,6 +1,30 @@
-﻿; ================================================
+#Requires AutoHotkey v2.0
+; ================================================
+; https://github.com/TheArkive/M-ArkDown_ahk2
+;
 ; Example Script - this just asks for a file and
 ; uses make_html() to convert the M-ArkDown into html.
+;
+; MIT License
+; Copyright (c) 2021 TheArkive
+;
+; Permission is hereby granted, free of charge, to any person obtaining a 
+; copy of this software and associated documentation files (the "Software"),
+; to deal in the Software without restriction, including without limitation
+; the rights to use, copy, modify, merge, publish, distribute, sublicense, 
+; and/or sell copies of the Software, and to permit persons to whom the 
+; Software is furnished to do so, subject to the following conditions:
+;
+; The above copyright notice and this permission notice shall be included 
+;  in all copies or substantial portions of the Software.
+;
+; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS 
+; OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+; THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
+; FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+; IN THE SOFTWARE.
 ; ================================================
 
 ; file_path := FileSelect("1",A_ScriptDir '\index.md',"Select markdown file:","Markdown (*.md)")
@@ -103,20 +127,15 @@ make_html(_in_text, options:="", github:=false, final:=true, md_type:="") {
     i := 0
     While (i < a.Length) { ; ( ) \x28 \x29 ; [ ] \x5B \x5D ; { } \x7B \x7D
         
-        i++, line := a[i]
-        
-        If line="<!--debug-->"
-            options.debug := true
-        
-        line := strip_comment(line)
+        i++, line := strip_comment(a[i])
         ul := "", ul2 := ""
         ol := "", ol2 := "", ol_type := ""
         
         If RegExMatch(line,ref_link_rgx) ; skip ref-style links and footnotes
             Continue
         
-        ; If RegExMatch(line,"^<nav")
-            ; Continue
+        If RegExMatch(line,"^<nav")
+            Continue
         
         If (final && line = "<toc>") {
             do_toc := True
@@ -138,25 +157,9 @@ make_html(_in_text, options:="", github:=false, final:=true, md_type:="") {
             Continue
         }
         
-        box_block := "" ; <box> ... </box>
-        If line="<box>" {
-            While (line != '</box>') {
-                If !line_inc()
-                    Break
-                box_block .= (box_block?'`r`n':'') line
-            }
-            
-            If (box_block = "</box>") ; skip an empty box block
-                Continue
-            
-            box_block := StrReplace(box_block,'`r`n','`r`n<br>')
-            
-            body .= (body?'`r`n':'') '<div class="box">' inline_code(box_block) "</div>"
-        }
-        
         code_block := "" ; code block
-        If RegExMatch(line,"i)^(``````)([a-z]+)?$",&n) || RegExMatch(line,"i)^(````````)([a-z]+)?$",&n) {
-            match := n[1]
+        If (line = "``````") || (line = "````````") {
+            match := line
             If !line_inc()
                 Break
             
@@ -166,25 +169,16 @@ make_html(_in_text, options:="", github:=false, final:=true, md_type:="") {
                     Break
             }
             
-            If n[2] = "pp"
-                code_block := prettyprint(code_block, options)
-            Else
-                code_block := conv(code_block)
-            
-            body .= (body?"`r`n":"") "<pre><code>" code_block "</code></pre>"
+            body .= (body?"`r`n":"") "<pre><code>" convert(code_block) "</code></pre>"
             Continue
         }
         
         ; header h1 - h6
         If RegExMatch(line, "^(#+) (.+?)(?:\x5B[ \t]*(\w+)[ \t]*\x5D)?$", &n) {
-            depth := StrLen(n[1])
-            , title := inline_code(Trim(n[2]," `t"))
-            , _class := (depth <= 2 || n[3]="underline") ? "underline" : ""
+            depth := StrLen(n[1]), title := inline_code(Trim(n[2]," `t"))
+            _class := (depth <= 2 || n[3]="underline") ? "underline" : ""
             
-            id := rem_txt_color(title) ; remove color text code for the id
-            id := undo(id)
-            id := RegExReplace(RegExReplace(StrLower(StrReplace(id," - ","-")),"[\[\]\{\}\(\)\@\!\.]",""),"[ \.]","-")
-            
+            id := RegExReplace(RegExReplace(StrLower(title),"[\[\]\{\}\(\)\@\!]",""),"[ \.]","-")
             opener := "<h" depth (id?' id="' id '" ':'') (_class?' class="' _class '"':'') '>'
             
             body .= (body?"`r`n":"") opener title
@@ -201,9 +195,7 @@ make_html(_in_text, options:="", github:=false, final:=true, md_type:="") {
         If next_line && line && RegExMatch(next_line,"^(\-+|=+)$") {
             depth := (SubStr(next_line,1,1) = "=") ? 1 : 2
             
-            id := rem_txt_color(line) ; remove color text code for the id
-            id := undo(id)
-            id := RegExReplace(RegExReplace(StrLower(id),"[\[\]\{\}\(\)\@\!<>\|]",""),"[ \.]","-")
+            id := RegExReplace(RegExReplace(StrLower(line),"[\[\]\{\}\(\)\@\!<>\|]",""),"[ \.]","-")
             opener := "<h" depth ' id="' id '" class="underline">'
                     
             body .= (body?"`r`n":"") opener inline_code(line)
@@ -220,7 +212,7 @@ make_html(_in_text, options:="", github:=false, final:=true, md_type:="") {
             While RegExMatch(line,"^\- \x5B([ xX])\x5D (.+)",&n) {
                 chk := (n[1]="x") ? 'checked=""' : ''
                 body .= '`r`n<li><input type="checkbox" id="check' chk_id '" disabled="" ' chk '>'
-                               . '<label for="check' chk_id '">  ' inline_code(n[2]) '</label></li>'
+                               . '<label for="check' chk_id '">  ' n[2] '</label></li>'
                 chk_id++
                 If !line_inc()
                     Break
@@ -243,7 +235,7 @@ make_html(_in_text, options:="", github:=false, final:=true, md_type:="") {
             }
             
             body .= (body?"`r`n":"") '<p><details><summary class="spoiler">'
-                  . disp_text "</summary>" make_html(spoiler_text,options,github,false,"spoiler") "</details></p>"
+                  . disp_text "</summary>" make_html(spoiler_text,,github,false,"spoiler") "</details></p>"
             Continue
         }
         
@@ -280,7 +272,7 @@ make_html(_in_text, options:="", github:=false, final:=true, md_type:="") {
                     Break
             }
             
-            body .= (body?"`r`n":"") "<blockquote>" make_html(blockquote,options,github, false, "blockquote") "</blockquote>"
+            body .= (body?"`r`n":"") "<blockquote>" make_html(blockquote,,github, false, "blockquote") "</blockquote>"
             Continue
         }
         
@@ -396,7 +388,8 @@ make_html(_in_text, options:="", github:=false, final:=true, md_type:="") {
         
         For i, item in toc { ; 1=depth, 2=title, 3=id
             depth := item[1] - diff - 1
-            ctl := temp.Add( "Text",, rpt("     ",depth) "• " undo(rem_txt_color(item[2])) )
+            
+            ctl := temp.Add("Text",, rpt("     ",depth) "• " item[2])
             ctl.GetPos(,,&w, &h)
             toc_width := (w > toc_width) ? w : toc_width
             toc_height += options.font_size * 2
@@ -416,8 +409,7 @@ make_html(_in_text, options:="", github:=false, final:=true, md_type:="") {
         temp.SetFont("s" options.font_size, options.font_name)
         
         Loop nav_arr.Length {
-            txt := nav_arr[A_Index]
-            title := SubStr(txt, 1, (sep := InStr(txt, "=")) - 1)
+            title := SubStr((txt := nav_arr[A_Index]), 1, (sep := InStr(txt, "=")) - 1)
             
             ctl := temp.Add("Text",,title)
             ctl.GetPos(,,&w)
@@ -522,7 +514,7 @@ make_html(_in_text, options:="", github:=false, final:=true, md_type:="") {
     AtoT(_a_) { ; for dumping the remaining text of a poorly formated list
         _txt_ := '<p>'
         For i, o in _a_
-            _txt_ .= ((i>1)?'<br>':'') inline_code(o.line)
+            _txt_ .= ((i>1)?'<br>':'') o.line
         return _txt_ '</p>'
     }
     
@@ -530,52 +522,31 @@ make_html(_in_text, options:="", github:=false, final:=true, md_type:="") {
     
     LT_spec(_in_) => IsInteger(t:=Trim(_in_,".)")) ? Integer(t) : t
     
-    rem_txt_color(_in_) => RegExReplace(RegExReplace(_in_,'<span style=".+?">'),"</span>")
-    
-    inline_code(_in, is_code := false) {
+    inline_code(_in) {
         output := _in, check := ""
         
         While (check != output) { ; repeat until no changes are made
             check := output
             
-            ; inline code / inline code colors
+            ; inline code
             While RegExMatch(output, "``(.+?)``", &x) {
                 
-                is_code := true
-                
-                If RegExMatch(x[1],"^\#[\da-fA-F]{3,3}$")
-                || RegExMatch(x[1],"^\#[\da-fA-F]{6,6}$")
+                If RegExMatch(x[1],"^\#[\da-fA-F]{6,6}$")
                 || RegExMatch(x[1],"^rgb\(\d{1,3}, *\d{1,3}, *\d{1,3}\)$")
                 || RegExMatch(x[1],"^hsl\(\d{1,3}, *\d{1,3}%, *\d{1,3}%\)$") {
-                    repl := '<code>' x[1] ' <span class="circle" style="background-color: ' x[1] ';'
-                                                                    . ' width: ' (options.font_size//2) 'px;'
-                                                                    . ' height: ' (options.font_size//2) 'px;'
-                                                                    . ' display: inline-block;'
-                                                                    . ' border: 2px solid ' x[1] ';'
-                                                                    . ' border-radius: 50%;"></span></code>'
-                    output := StrReplace(output, x[0], repl,,,1)
-                } Else {
-                    repl := conv(x[1])
-                    output := StrReplace(output, x[0], "<code>" repl "</code>",,,1)
-                }
+                    output := '<code>' x[1] ' <span class="circle" style="background-color: ' x[1] ';'
+                                                                      . ' width: ' (options.font_size//2) 'px;'
+                                                                      . ' height: ' (options.font_size//2) 'px;'
+                                                                      . ' display: inline-block;'
+                                                                      . ' border: 2px solid ' x[1] ';'
+                                                                      . ' border-radius: 50%;"></span></code>'
+                } Else If !IsInCode()
+                    output := StrReplace(output, x[0], "<code>" convert(x[1]) "</code>",,,1)
             }
-            
-            ; box <box>...</box>
-            While RegExMatch(output, "<box>(.+?)</box>", &x)
-                output := StrReplace(output,x[0],'<span class="box">' x[1] '</span>')
-            
-            ; pretty print <pp>...</pp>
-            While RegExMatch(output, "<pp>(.+?)</pp>", &x)
-                output := StrReplace(output,x[0],'<span style="font-family: Consolas">' prettyprint(x[1],options) '</span>')
             
             ; escape characters
             While RegExMatch(output,"(\\)(.)",&x)
                 output := StrReplace(output,x[0],"&#" Ord(x[2]) ";")
-            
-            ; colored text
-            While RegExMatch(output, "<c *= *#([\da-fA-F]+)>(.+?)</c>", &x) && (StrLen(x[1])=3 || StrLen(x[1])=6) && !IsInCode() {
-                output := StrReplace(output, x[0], '<span style="color:#' x[1] '">' x[2] '</span>',,,1)
-            }
             
             ; image
             While RegExMatch(output, "!\x5B *([^\x5D]*) *\x5D\x28 *([^\x29]+) *\x29(?:\x28 *([^\x29]+) *\x29)?", &x) && !IsInCode() {
@@ -650,200 +621,12 @@ make_html(_in_text, options:="", github:=false, final:=true, md_type:="") {
     
     strip_comment(_in_) => RTrim(RegExReplace(_in_,"^(.+)<\!\-\-[^>]+\-\->","$1")," `t")
     
-    ; conv(_in_) => StrReplace(StrReplace(StrReplace(_in_,'&','&amp;'),'<','&lt;'),'>','&gt;')
+    convert(_in_) { ; convert markup chars so they don't get recognized, a forced kind of escaping in certain contexts
+        output := _in_
+        For i, v in ["&","<",">","\","*","_","-","=","~","``","[","]","(",")","!","{","}"]
+            output := StrReplace(output,v,"&#" Ord(v) ";")
+        return output
+    }
     
     rpt(x,y) => StrReplace(Format("{:-" y "}","")," ",x) ; string repeat ... x=str, y=iterations
-    
-    e(_) {
-        r := ""
-        For ch in StrSplit(_)
-            r .= ("&#x" Format("{:X}",Ord(ch)) ";")
-        return r
-    }
-    
-    conv(_) {
-        static chr_list := ['&','<','>','"',"'",'\',"``",'=','+','-','/','*',',',':','^','|','!','?','.','~']
-        For ch in chr_list
-            _ := StrReplace(_,ch,e(ch))
-        return _
-    }
 }
-
-prettyprint(_in_, options) {
-    Static rgm := RegExMatch
-    cd := options.code
-    out := ""
-    
-    in_line_comment := false
-    in_comment := false
-    
-    in_string := false
-    c_str := ""
-    
-    line := ""
-    
-    i := 1, c := ""
-    
-    arr := StrSplit(_in_)
-    
-    Loop arr.Length {
-        
-        L := c ; last character
-        , c := arr[i]
-        ; , L := SubStr(line,-1)
-        ; , L2 := SubStr(line,-2)
-        ; , L3 := SubStr(line,-3)
-        , N := arr.Has(i+1) ? arr[i+1] : ""
-        
-        If (in_string && c!=c_str)
-        || (in_line_comment && c!='`n' && c!='`r')
-        || (in_comment && c!='/' && L!='*') {
-            line .= c, i++
-            Continue
-        }
-        
-        Switch c {
-            Case '`r', '`n':
-                If in_line_comment {
-                    out .= span(cd.comment, conv(line) )
-                    line := ""
-                    in_line_comment := false
-                }
-                
-                out .= conv(line) c
-                line := ""
-                
-            Case '"', "'":
-                If (c_str="") {
-                    out .= conv(line)
-                    c_str := line := c
-                    in_string := true
-                    
-                } Else If (c = c_str) && (L != "``") {
-                    out .= span(cd.str, conv(line c) )
-                    c_str := line := ""
-                    in_string := false
-                    
-                }
-            
-            Case ';':
-                out .= conv(line)
-                line := c
-                in_line_comment := true
-                
-            Case '*':
-                If (L='/') {
-                    out .= conv(SubStr(line,1,-1)), line := '/*'
-                    in_comment := true
-                    
-                } Else
-                    line .= c
-            
-            Case '/':
-                If (L='*') && in_comment {
-                    out .= span(cd.comment, conv(line c) )
-                    line := ""
-                    in_comment := false
-                    
-                } Else
-                    line .= c
-            
-            Case '+','-','*','/','=','!','~','&','^','|','>','<','?':
-                Static punct := '+-*/=!~&^|><?:'
-                     , rgx_math := "(>>>=|<<=|>>=|>>>|<<|>>|\^=|\&=|\x7C=|\.=|//=|/=|\*=|\-=|\+=|:=|//|\*\*|\+\+|\-\-|\*|/|\^|\!|\x7C|~)"
-                     , rgx_comp := "(!==|!=|~=|==|<=|>=|&&|\x7C\x7C|\?\?|:|\?|>|<|=)"
-                
-                If (!InStr(N,punct) && (N!="")) || (N="") {
-                    If RegExMatch(line c,rgx_math "$",&y) {
-                        out .= conv(SubStr(line c,1,y.Pos-1))
-                        out .= span(cd.math, conv(y[1]) )
-                        line := ""
-                    } Else If RegExMatch(line c,rgx_comp "$",&y) {
-                        out .= conv(SubStr(line c,1,y.Pos-1))
-                        out .= span(cd.compare, conv(y[1]) )
-                        line := ""
-                    } Else If (c='-' && !IsInteger(N)) || (c='+') {
-                        out .= conv(line) span(cd.math, c )
-                        line := ""
-                    } Else
-                        line .= c
-                } Else
-                    line .= c
-                
-            Case '(',')','[',']','{','}':
-                out .= conv(line) span(cd.bc, conv(c) )
-                line := ""
-                
-            Case ',':
-                out .= conv(line) span(cd.comma, c )
-                line := ""
-                
-            Case '.':
-                If (IsAlnum(L) || L="_" || L=")" || L="]") && (IsAlpha(N) || N="_") {
-                    out .= conv(line) span(cd.objdot, conv(c) )
-                    line := ""
-                } Else
-                    line .= c
-                
-            Default:
-                line .= c
-        }
-        
-        i++
-    }
-    
-    If in_line_comment {
-        out .= span(cd.comment, conv(line) ), line := ""
-    }
-    
-    out .= conv(line)
-    
-    return out
-    
-    ; conv(_in_) => StrReplace(StrReplace(StrReplace(_in_,'&','&amp;'),'<','&lt;'),'>','&gt;')
-    
-    span(_clr, _) => '<span style="color:' _clr '">' _ '</span>'
-    
-    e(_) {
-        r := ""
-        For ch in StrSplit(_)
-            r .= ("&#x" Format("{:X}",Ord(ch)) ";")
-        return r
-    }
-    
-    conv(_) {
-        static chr_list := ['&','<','>','"',"'",'\',"``",'=','+','-','/','*',',',':','^','|','!','?','.','~']
-        For ch in chr_list
-            _ := StrReplace(_,ch,e(ch))
-        return _
-    }
-}
-
-convert(_) {
-    static chr_list := ['&','<','>','"',"'",'\',"``",'=','+','-','/','*',',',':','^','|','!','?','.','~']
-    For ch in chr_list
-        _ := StrReplace(_,ch,e(ch))
-    return _
-    
-    e(_) {
-        r := ""
-        For ch in StrSplit(_)
-            r .= ("&#x" Format("{:X}",Ord(ch)) ";")
-        return r
-    }
-}
-
-undo(_) {
-    static chr_list := ['<','>','"',"'",'\',"``",'=','+','-','/','*',',',':','^','|','!','?','&','.','~']
-    For ch in chr_list
-        _ := StrReplace(_,e(ch),ch)
-    return _
-    
-    e(_) {
-        r := ""
-        For ch in StrSplit(_)
-            r .= ("&#x" Format("{:X}",Ord(ch)) ";")
-        return r
-    }
-}
-

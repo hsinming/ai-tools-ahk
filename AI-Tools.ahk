@@ -6,7 +6,7 @@
 #singleInstance force
 #Include "_jxon.ahk"
 #include "_Cursor.ahk"
-#Include "_MD_Gen.ahk"
+#Include "_MD2HTML.ahk"
 
 Persistent
 SendMode "Input"
@@ -33,6 +33,7 @@ _activeWin := ""
 _oldClipboard := ""
 _debug := GetSetting("settings", "debug", false)
 _reload_on_change := GetSetting("settings", "reload_on_change", false)
+_iMenu := Menu()
 
 ;#
 CheckSettings()
@@ -57,20 +58,22 @@ HotKey GetSetting("settings", "menu_hotkey"), (*) => (
 ;###
 
 ShowPopupMenu() {
+    global _iMenu
     _iMenu.Show()
 }
 
-PromptHandler(promptName, append := false) {
-    try {
+PromptHandler(promptName) {
+    global _running, _startTime
 
+    try {
         if (_running) {            
             ;MsgBox "Already running. Please wait for the current request to finish."
             Reload
             return
         }
 
-        global _running := true
-        global _startTime := A_TickCount
+        _running := true
+        _startTime := A_TickCount
 
         ShowWaitTooltip()
         SetSystemCursor(GetSetting("settings", "cursor_wait_file", "wait"))
@@ -82,7 +85,7 @@ PromptHandler(promptName, append := false) {
         try {
             input := GetTextFromClip()
         } catch {
-            global _running := false
+            _running := false
             RestoreCursor()
             return
         }
@@ -90,10 +93,9 @@ PromptHandler(promptName, append := false) {
         CallAPI(mode, promptName, prompt, input, promptEnd)
 
     } catch as err {
-        global _running := false
+        _running := false
         RestoreCursor()
         MsgBox Format("{1}: {2}.`n`nFile:`t{3}`nLine:`t{4}`nWhat:`t{5}", type(err), err.Message, err.File, err.Line, err.What), , 16
-        ;throw err
     }
 }
 
@@ -127,9 +129,11 @@ SelectText() {
 }
 
 GetTextFromClip() {
-    global _activeWin := WinGetTitle("A")
+    global _oldClipboard, _activeWin
+
+    _activeWin := WinGetTitle("A")
     if _oldClipboard == "" {
-        global _oldClipboard := A_Clipboard
+        _oldClipboard := A_Clipboard
     }
 
     A_Clipboard := ""
@@ -138,20 +142,17 @@ GetTextFromClip() {
     text := A_Clipboard
 
     if StrLen(text) < 1 {
-        throw ValueError("No text selected", -1)
+        Throw ValueError("No text selected", -1)
     } else if StrLen(text) > 16000 {
-        throw ValueError("Text is too long", -1)
+        Throw ValueError("Text is too long", -1)
     }
 
     return text
 }
 
-ShowWarning(message) {
-    MsgBox message
-}
-
 GetSetting(section, key, defaultValue := "") {
     global _settingsCache
+    
     if (_settingsCache.Has(section . key . defaultValue)) {
         return _settingsCache.Get(section . key . defaultValue)
     } else {
@@ -208,7 +209,8 @@ GetBody(mode, promptName, prompt, input, promptEnd) {
 }
 
 CallAPI(mode, promptName, prompt, input, promptEnd) {
-
+    global _running
+    
     body := GetBody(mode, promptName, prompt, input, promptEnd)
     bodyJson := Jxon_dump(body, 4)
     LogDebug("bodyJson ->`n" bodyJson)
@@ -220,8 +222,8 @@ CallAPI(mode, promptName, prompt, input, promptEnd) {
 
     req.open("POST", endpoint, true)
     req.SetRequestHeader("Content-Type", "application/json")
-    req.SetRequestHeader("Authorization", "Bearer " apiKey) ; openai
-    req.SetRequestHeader("api-key", apiKey) ; azure
+    req.SetRequestHeader("Authorization", "Bearer " apiKey) ; OpenAI
+    req.SetRequestHeader("api-key", apiKey) ; Azure
     req.SetRequestHeader('Content-Length', StrLen(bodyJson))
     req.SetRequestHeader("If-Modified-Since", "Sat, 1 Jan 2000 00:00:00 GMT")
     req.SetTimeouts(0, 0, 0, GetSetting("settings", "timeout", 120) * 1000) ; read, connect, send, receive
@@ -232,7 +234,7 @@ CallAPI(mode, promptName, prompt, input, promptEnd) {
 
         if (req.status == 0) {
             RestoreCursor()
-            global _running := false
+            _running := false
             MsgBox "Error: Unable to connect to the API. Please check your internet connection and try again.", , 16
             return
         } else if (req.status == 200) { ; OK.
@@ -240,13 +242,13 @@ CallAPI(mode, promptName, prompt, input, promptEnd) {
             HandleResponse(data, mode, promptName, input)
         } else {
             RestoreCursor()
-            global _running := false
+            _running := false
             MsgBox "Error: Status " req.status " - " req.responseText, , 16
             return
         }
     } catch as e {
         RestoreCursor()
-        global _running := false
+        _running := false
         MsgBox "Error: " "Exception thrown!`n`nwhat: " e.what "`nfile: " e.file 
         . "`nline: " e.line "`nmessage: " e.message "`nextra: " e.extra, , 16
         return
@@ -254,7 +256,7 @@ CallAPI(mode, promptName, prompt, input, promptEnd) {
 }
 
 HandleResponse(data, mode, promptName, input) {
-    global _oldClipboard
+    global _running, _oldClipboard, _displayResponse, _activeWin
 
     try {
         LogDebug("data ->`n" data)
@@ -287,7 +289,7 @@ HandleResponse(data, mode, promptName, input) {
         }
 
         response_type := GetSetting(promptName, "response_type", "")
-        if _displayResponse or response_type == "popup" {
+        if _displayResponse or StrLower(response_type) == "popup" {
             MyGui := Gui(, "Response")
             MyGui.SetFont("s13")
             MyGui.Opt("+AlwaysOnTop +Owner +Resize")  ; +Owner avoids a taskbar button.
@@ -312,11 +314,11 @@ HandleResponse(data, mode, promptName, input) {
 
             ; 在第一個頁籤添加 ActiveX 控件
             ogcActiveXWBC := MyGui.Add("ActiveX", "x" margin " y" tabYOffset + margin " w" InitWidth - 4*margin " h" InitHeight - 4*margin - ButtonHeight - 2*margin, "Shell.Explorer")
-            WB := ogcActiveXWBC.Value
-            WB.Navigate("about:blank")
             css := FileRead("style.css")
             options := {css: css, font_name: "Segoe UI", font_size: 16, font_weight: 400, line_height: "1.6"}
-            html := make_html(text, options, false)
+            html := make_html(text, options, true)
+            WB := ogcActiveXWBC.Value
+            WB.Navigate("about:blank")            
             WB.document.write(html)
 
             ; -------------------
@@ -347,13 +349,13 @@ HandleResponse(data, mode, promptName, input) {
             send "^v"
         }
 
-        global _running := false
+        _running := false
         Sleep 500       
         
     } finally {
-        global _running := false
+        _running := false
         A_Clipboard := _oldClipboard
-        global _oldClipboard := ""
+        _oldClipboard := ""
         RestoreCursor()
     }
     
@@ -385,8 +387,8 @@ HandleResponse(data, mode, promptName, input) {
         xClose.Move(Width - ButtonWidth - margin, Height - ButtonHeight - margin, ButtonWidth, ButtonHeight)
     }
     
-    CopyText(xEdit) {
-        A_Clipboard := xEdit.Value
+    CopyText(edit) {
+        A_Clipboard := edit.Text
         MouseGetPos(&mouseX, &mouseY)
         ToolTip("✔ Copied!", mouseX + 10, mouseY + 10)  ; 在游標附近顯示提示
         SetTimer () => ToolTip(), -1000  ; 設定 1 秒後自動清除 ToolTip
@@ -394,11 +396,11 @@ HandleResponse(data, mode, promptName, input) {
 }
 
 InitPopupMenu() {
-    global _iMenu := Menu()
+    global _displayResponse, _iMenu
     iMenuItemParms := Map()
 
-    _iMenu.Add "&`` - Display response in new window", NewWindowCheckHandler
-    _iMenu.Add  ; Add a separator line.
+    _iMenu.Add("&`` - Display response in new window", NewWindowCheckHandler)
+    _iMenu.Add()  ; Add a separator line.
 
     menu_items := IniRead("./settings.ini", "popup_menu")
 
@@ -406,8 +408,8 @@ InitPopupMenu() {
     loop parse menu_items, "`n" {
         v_promptName := A_LoopField
         if (v_promptName != "" and SubStr(v_promptName, 1, 1) != "#") {
-            if (v_promptName = "-") {
-                _iMenu.Add  ; Add a separator line.
+            if (v_promptName == "-") {
+                _iMenu.Add()  ; Add a separator line.
             } else {
                 menu_text := GetSetting(v_promptName, "menu_text", v_promptName)
                 if (RegExMatch(menu_text, "^[^&]*&[^&]*$") == 0) {
@@ -421,7 +423,7 @@ InitPopupMenu() {
                     id++
                 }
 
-                _iMenu.Add menu_text, MenuHandler
+                _iMenu.Add(menu_text, MenuHandler)
                 item_count := DllCall("GetMenuItemCount", "ptr", _iMenu.Handle)
                 iMenuItemParms[item_count] := v_promptName
             }
@@ -431,30 +433,30 @@ InitPopupMenu() {
         PromptHandler(iMenuItemParms[ItemPos])
     }
     NewWindowCheckHandler(*) {
-        _iMenu.ToggleCheck "&`` - Display response in new window"
-        global _displayResponse := !_displayResponse
+        _iMenu.ToggleCheck("&`` - Display response in new window")
+        _displayResponse := !_displayResponse
         _iMenu.Show()
     }
 }
 
 InitTrayMenu() {
     tray := A_TrayMenu
-    tray.add
-    tray.add "Open settings", OpenSettings
-    tray.add "Reload settings", ReloadSettings
-    tray.add
-    tray.add "Github readme", OpenGithub
+    tray.Add()
+    tray.Add("Open settings", OpenSettings)
+    tray.Add("Reload settings", ReloadSettings)
+    tray.Add()
+    tray.Add("Github readme", OpenGithub)
     TrayAddStartWithWindows(tray)
 }
 
 TrayAddStartWithWindows(tray) {
-    tray.add "Start with Windows", StartWithWindowsAction
-    SplitPath a_scriptFullPath, , , , &script_name
-    _sww_shortcut := a_startup "\" script_name ".lnk"
+    tray.Add("Start with Windows", StartWithWindowsAction)
+    SplitPath A_ScriptFullPath, , , , &script_name
+    _sww_shortcut := A_Startup "\" script_name ".lnk"
     if FileExist(_sww_shortcut) {
-        fileGetShortcut _sww_shortcut, &target  ;# update if script has moved
-        if (target != a_scriptFullPath) {
-            fileCreateShortcut a_scriptFullPath, _sww_shortcut
+        FileGetShortcut _sww_shortcut, &target  ;# update if script has moved
+        if (target != A_ScriptFullPath) {
+            FileCreateShortcut A_ScriptFullPath, _sww_shortcut
         }
         tray.Check("Start with Windows")
     } else {
@@ -462,13 +464,13 @@ TrayAddStartWithWindows(tray) {
     }
     StartWithWindowsAction(*) {
         if FileExist(_sww_shortcut) {
-            fileDelete(_sww_shortcut)
+            FileDelete(_sww_shortcut)
             tray.Uncheck("Start with Windows")
-            trayTip("Start With Windows", "Shortcut removed", 5)
+            TrayTip("Start With Windows", "Shortcut removed", 5)
         } else {
-            fileCreateShortcut(a_scriptFullPath, _sww_shortcut)
+            FileCreateShortcut(A_ScriptFullPath, _sww_shortcut)
             tray.Check("Start with Windows")
-            trayTip("Start With Windows", "Shortcut created", 5)
+            TrayTip("Start With Windows", "Shortcut created", 5)
         }
     }
 }
@@ -482,6 +484,7 @@ OpenSettings(*) {
 }
 
 ReloadSettings(*) {
+    global _settingsCache
     TrayTip("Reload Settings", "Reloading settings...", 5)
     _settingsCache.Clear()
     InitPopupMenu()
@@ -493,6 +496,7 @@ UnescapeSetting(obj) {
 }
 
 ShowWaitTooltip() {
+    global _running, _startTime
     if (_running) {
         elapsedTime := (A_TickCount - _startTime) / 1000
         ToolTip "Generating response... " Format("{:0.2f}", elapsedTime) "s"
@@ -503,10 +507,11 @@ ShowWaitTooltip() {
 }
 
 CheckSettings() {
+    global _lastModified, _reload_on_change
     if (_reload_on_change and FileExist("./settings.ini")) {
         lastModified := FileGetTime("./settings.ini")
         if (lastModified != _lastModified) {
-            global _lastModified := lastModified
+            _lastModified := lastModified
             TrayTip("Settings Updated", "Restarting...", 5)
             Sleep 2000
             Reload
@@ -516,6 +521,7 @@ CheckSettings() {
 }
 
 LogDebug(msg) {
+    global _debug
     if (_debug != false) {
         now := FormatTime(A_Now, "yyyy-MM-dd HH:mm:ss")
         logMsg := "[" . now . "] " . msg . "`n"
