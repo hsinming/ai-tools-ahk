@@ -1,5 +1,6 @@
 ﻿; ai-tools-ahk - AutoHotkey scripts for AI tools
-; https://github.com/ecornell/ai-tools-ahk
+; https://github.com/hsinming/ai-tools-ahk
+; based on https://github.com/ecornell/ai-tools-ahk
 ; MIT License
 
 #Requires AutoHotkey v2.0
@@ -484,7 +485,7 @@ TrayAddStartWithWindows(tray) {
 }
 
 OpenGithub(*) {
-    Run "https://github.com/ecornell/ai-tools-ahk#usage"
+    Run "https://github.com/hsinming/ai-tools-ahk#usage"
 }
 
 OpenSettings(*) {
