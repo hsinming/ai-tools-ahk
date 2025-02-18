@@ -102,30 +102,38 @@ PromptHandler(promptName) {
 ;###
 
 SelectText() {
-    global _oldClipboard := A_Clipboard
+    global _oldClipboard := A_Clipboard  ; 保存原剪貼簿內容
 
-    A_Clipboard := ""
-    Send "^c"
-    ClipWait(2)
+    A_Clipboard := ""  ; 清空剪貼簿
+    Send("^c")  ; 嘗試複製當前選取的文字
+    ClipWait(1)  ; 等待剪貼簿更新
+
     text := A_Clipboard
-
     if StrLen(text) > 0 {
-        return
+        return  ; 如果成功複製，則直接返回
     }
-    
-    if WinActive("ahk_exe WINWORD.EXE") or WinActive("ahk_exe OUTLOOK.EXE") {
-        ; In Word/Outlook select the current paragraph
-        Send "^{Up}^+{Down}+{Left}" ; Move to para start, select para, move left to not include para end
-    } else if WinActive("ahk_exe notepad++.exe") or WinActive("ahk_exe Code.exe") {
-        ; In Notepad++/VS Code select the current line
-        Send "{End}{End}+{Home}+{Home}"
-    } else {
-        ; Select all text if no text is selected
-        if StrLen(text) < 1 {
-            Send "^a"
+
+    ; 使用 Map 來存放應用程式對應的選取方式
+    selectionMethods := Map(
+        "WINWORD.EXE", "^{Up}^+{Down}+{Left}",    ; Word / Outlook - 選取段落
+        "OUTLOOK.EXE", "^{Up}^+{Down}+{Left}",
+        "notepad++.exe", "{End}{End}+{Home}+{Home}",  ; Notepad++ / VS Code - 選取整行
+        "Code.exe", "{End}{End}+{Home}+{Home}",
+        "Menu.exe", "^{Home}^+{End}"  ; NTUH RIS - 選取游標所在的整頁
+    )
+
+    ; 檢查目前的應用程式
+    for app, selectKeys in selectionMethods {
+        if WinActive("ahk_exe " app) {
+            Send(selectKeys)
+            Sleep(50)  ; 等待選取動作完成
+            return
         }
     }
-    sleep 50
+
+    ; 預設選取所有文字
+    Send("^a")
+    Sleep(50)
 }
 
 GetTextFromClip() {
@@ -143,7 +151,7 @@ GetTextFromClip() {
 
     if StrLen(text) < 1 {
         Throw ValueError("No text selected", -1)
-    } else if StrLen(text) > 16000 {
+    } else if StrLen(text) > 64000 {
         Throw ValueError("Text is too long", -1)
     }
 
