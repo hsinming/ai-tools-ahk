@@ -34,7 +34,6 @@ _activeWin := ""
 _oldClipboard := ""
 _debug := GetSetting("settings", "debug", false)
 _reload_on_change := GetSetting("settings", "reload_on_change", false)
-_iMenu := Menu()
 
 ;#
 CheckSettings()
@@ -405,7 +404,8 @@ HandleResponse(data, mode, promptName, input) {
 }
 
 InitPopupMenu() {
-    global _displayResponse, _iMenu
+    global _iMenu := Menu()  ; Create a new menu object.
+    global _displayResponse
     iMenuItemParms := Map()
 
     _iMenu.Add("&`` - Display response in new window", NewWindowCheckHandler)
@@ -433,7 +433,7 @@ InitPopupMenu() {
                 }
 
                 _iMenu.Add(menu_text, MenuHandler)
-                item_count := DllCall("GetMenuItemCount", "ptr", _iMenu.Handle)
+                item_count := DllCall("GetMenuItemCount", "Ptr", _iMenu.Handle)
                 iMenuItemParms[item_count] := v_promptName
             }
         }
