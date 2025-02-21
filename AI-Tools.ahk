@@ -32,8 +32,8 @@ _lastModified := FileGetTime("./settings.ini")
 _displayResponse := false
 _activeWin := ""
 _oldClipboard := ""
-_debug := GetSetting("settings", "debug", false)
-_reload_on_change := GetSetting("settings", "reload_on_change", false)
+_debug := ToBool(GetSetting("settings", "debug", "false"))
+_reload_on_change := ToBool(GetSetting("settings", "reload_on_change", "false"))
 
 ;#
 CheckSettings()
@@ -115,16 +115,16 @@ SelectText() {
 
     ; 使用 Map 來存放應用程式對應的選取方式
     selectionMethods := Map(
-        "WINWORD.EXE", "^{Up}^+{Down}+{Left}",    ; Word / Outlook - 選取段落
-        "OUTLOOK.EXE", "^{Up}^+{Down}+{Left}",
-        "notepad++.exe", "{End}{End}+{Home}+{Home}",  ; Notepad++ / VS Code - 選取整行
-        "Code.exe", "{End}{End}+{Home}+{Home}",
-        "Menu.exe", "^{Home}^+{End}"  ; NTUH RIS - 選取游標所在的整頁
+        "ahk_exe WINWORD.EXE", "^{Up}^+{Down}+{Left}",    ; Word / Outlook - 選取段落
+        "ahk_exe OUTLOOK.EXE", "^{Up}^+{Down}+{Left}",
+        "ahk_exe notepad++.exe", "{End}{End}+{Home}+{Home}",  ; Notepad++ / VS Code - 選取整行
+        "ahk_exe Code.exe", "{End}{End}+{Home}+{Home}",
+        "Radiology Information System", "^{Home}^+{End}"  ; NTUH RIS - 選取游標所在的整頁
     )
 
     ; 檢查目前的應用程式
     for app, selectKeys in selectionMethods {
-        if WinActive("ahk_exe " app) {
+        if WinActive(app) {
             Send(selectKeys)
             Sleep(50)  ; 等待選取動作完成
             return
@@ -279,8 +279,9 @@ HandleResponse(data, mode, promptName, input) {
 
         ;; Clean up response text
         text := StrReplace(text, '`r', "") ; remove carriage returns
-        replaceSelected := GetSetting(promptName, "replace_selected", "true")
-        if StrLower(replaceSelected) == "false" {
+        replaceSelected := ToBool(GetSetting(promptName, "replace_selected", "true"))
+        
+        if not replaceSelected {
             responseStart := GetSetting(promptName, "response_start", "")
             responseEnd := GetSetting(promptName, "response_end", "")
             text := input . responseStart . text . responseEnd
@@ -536,4 +537,8 @@ LogDebug(msg) {
         logMsg := "[" . now . "] " . msg . "`n"
         FileAppend(logMsg, "./debug.log")
     }
+}
+
+ToBool(value) {
+    return StrLower(String(value)) == "true"
 }
