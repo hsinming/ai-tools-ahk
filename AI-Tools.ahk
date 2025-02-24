@@ -3,7 +3,7 @@
 ; based on https://github.com/ecornell/ai-tools-ahk
 ; MIT License
 
-#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0+
 #singleInstance force
 #Include "_jxon.ahk"
 #include "_Cursor.ahk"
@@ -35,7 +35,7 @@ _oldClipboard := ""
 _debug := ToBool(GetSetting("settings", "debug", "false"))
 _reload_on_change := ToBool(GetSetting("settings", "reload_on_change", "false"))
 
-;#
+;# 
 CheckSettings()
 
 ;# menu
@@ -77,10 +77,6 @@ PromptHandler(promptName) {
 
         ShowWaitTooltip()
         SetSystemCursor(GetSetting("settings", "cursor_wait_file", "wait"))
-
-        prompt := GetSetting(promptName, "prompt")
-        promptEnd := GetSetting(promptName, "prompt_end")
-        mode := GetSetting(promptName, "mode", GetSetting("settings", "default_mode"))
         
         try {
             input := GetTextFromClip()
@@ -89,8 +85,9 @@ PromptHandler(promptName) {
             RestoreCursor()
             return
         }
-
-        CallAPI(mode, promptName, prompt, input, promptEnd)
+        
+        mode := GetSetting(promptName, "mode", GetSetting("settings", "default_mode"))
+        CallAPI(mode, promptName, input)
 
     } catch as err {
         _running := false
@@ -175,9 +172,7 @@ GetSetting(section, key, defaultValue := "") {
     }
 }
 
-GetBody(mode, promptName, prompt, input, promptEnd) {
-    body := Map()
-
+GetBody(mode, promptName, input) {
     ;; load mode defaults
     model := GetSetting(mode, "model")
     max_tokens := GetSetting(mode, "max_tokens", 4096)
@@ -202,9 +197,13 @@ GetBody(mode, promptName, prompt, input, promptEnd) {
     if (prompt_system != "") {
         messages.Push(Map("role", "system", "content", prompt_system))
     }
+    
+    prompt := GetSetting(promptName, "prompt")
+    promptEnd := GetSetting(promptName, "prompt_end", "")
     content := prompt . input . promptEnd
     messages.Push(Map("role", "user", "content", content))
     
+    body := Map()
     body["messages"] := messages
     body["model"] := model
     body["max_tokens"] := max_tokens
@@ -216,10 +215,10 @@ GetBody(mode, promptName, prompt, input, promptEnd) {
     return body
 }
 
-CallAPI(mode, promptName, prompt, input, promptEnd) {
+CallAPI(mode, promptName, input) {
     global _running
     
-    body := GetBody(mode, promptName, prompt, input, promptEnd)
+    body := GetBody(mode, promptName, input)
     bodyJson := Jxon_dump(body, 4)
     LogDebug("bodyJson ->`n" bodyJson)
 
@@ -227,7 +226,6 @@ CallAPI(mode, promptName, prompt, input, promptEnd) {
     apiKey := GetSetting(mode, "api_key", GetSetting("settings", "default_api_key"))
 
     req := ComObject("Msxml2.ServerXMLHTTP")
-
     req.open("POST", endpoint, true)
     req.SetRequestHeader("Content-Type", "application/json")
     req.SetRequestHeader("Authorization", "Bearer " apiKey) ; OpenAI
