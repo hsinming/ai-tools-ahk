@@ -84,7 +84,7 @@ PromptHandler(promptName) {
             _running := false
             RestoreCursor()
             return
-        }
+        }        
         
         mode := GetSetting(promptName, "mode", GetSetting("settings", "default_mode"))
         CallAPI(mode, promptName, input)
@@ -216,12 +216,12 @@ GetBody(mode, promptName, input) {
 }
 
 CallAPI(mode, promptName, input) {
-    global _running
+    global _running   
     
     body := GetBody(mode, promptName, input)
     bodyJson := Jxon_dump(body, 4)
     LogDebug("bodyJson ->`n" bodyJson)
-
+    
     endpoint := GetSetting(mode, "endpoint")
     apiKey := GetSetting(mode, "api_key", GetSetting("settings", "default_api_key"))
 
