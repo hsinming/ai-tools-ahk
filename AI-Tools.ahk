@@ -297,7 +297,7 @@ HandleResponse(data, mode, promptName, input) {
             }
         }
 
-        response_type := GetSetting(promptName, "response_type", "")
+        response_type := GetSetting(promptName, "response_type", "popup")
         if _displayResponse or StrLower(response_type) == "popup" {
             MyGui := Gui(, "Response")
             MyGui.SetFont("s13")
