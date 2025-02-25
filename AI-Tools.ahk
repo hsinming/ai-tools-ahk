@@ -14,9 +14,9 @@ SendMode "Input"
 
 ;# init setup
 if not (FileExist("settings.ini")) {
-    api_key := InputBox("Enter your OpenAI API key", "AI-Tools-AHK : Setup", "W400 H100").value
+    api_key := InputBox("Enter your API key", "AI-Tools-AHK : Setup", "W400 H100").value
     if (api_key == "") {
-        MsgBox("To use this script, you need to enter an OpenAI key. Please restart the script and try again.")
+        MsgBox("To use this script, you need to enter an API key. Please restart the script and try again.")
         ExitApp
     }
     FileCopy("settings.ini.default", "settings.ini")
