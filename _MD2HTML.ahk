@@ -1,4 +1,4 @@
-#Requires AutoHotkey v2.0
+﻿#Requires AutoHotkey v2.0
 ; ================================================
 ; https://github.com/TheArkive/M-ArkDown_ahk2
 ;
