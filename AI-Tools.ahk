@@ -96,39 +96,50 @@ PromptHandler(promptName) {
     }
 }
 
-;###
+IniReadSection(file, section) {
+    result := Map()
+    insideSection := false
+    loop read file {
+        line := Trim(A_LoopReadLine)
+        if (line = "" || SubStr(line, 1, 1) = ";")  ; Skip empty lines and comments
+            continue
+        if (RegExMatch(line, "^\[(.*)\]$", &match)) {  ; Detect section header
+            insideSection := (match[1] = section)
+            continue
+        }
+        if insideSection && RegExMatch(line, "^(.*?)=(.*)$", &match) {
+            result[Trim(match[1])] := Trim(match[2])  ; Store key-value pair
+        }
+    }
+    return result
+}
 
 SelectText() {
-    global _oldClipboard := A_Clipboard  ; 保存原剪貼簿內容
+    global _oldClipboard := A_Clipboard  ; Save clipboard content
 
-    A_Clipboard := ""  ; 清空剪貼簿
-    Send("^c")  ; 嘗試複製當前選取的文字
-    ClipWait(1)  ; 等待剪貼簿更新
+    A_Clipboard := ""  ; Clear clipboard
+    Send("^c")  ; Try copying text using Ctrl+C
+    ClipWait(2)  ; Wait for clipboard update
 
-    text := A_Clipboard
+    text := A_Clipboard   
+
     if StrLen(text) > 0 {
-        return  ; 如果成功複製，則直接返回
+        return  ; Return if text was successfully copied
     }
 
-    ; 使用 Map 來存放應用程式對應的選取方式
-    selectionMethods := Map(
-        "ahk_exe WINWORD.EXE", "^{Up}^+{Down}+{Left}",    ; Word / Outlook - 選取段落
-        "ahk_exe OUTLOOK.EXE", "^{Up}^+{Down}+{Left}",
-        "ahk_exe notepad++.exe", "{End}{End}+{Home}+{Home}",  ; Notepad++ / VS Code - 選取整行
-        "ahk_exe Code.exe", "{End}{End}+{Home}+{Home}",
-        "Radiology Information System", "^{Home}^+{End}"  ; NTUH RIS - 選取游標所在的整頁
-    )
-
-    ; 檢查目前的應用程式
-    for app, selectKeys in selectionMethods {
-        if WinActive(app) {
+    ; Read all selection methods from settings.ini
+    selectionMethods := IniReadSection("settings.ini", "SelectionMethods")
+    
+    ; Loop through all identifiers and select text if the active window matches
+    for identifier, selectKeys in selectionMethods {
+        if WinActive(identifier) {
             Send(selectKeys)
-            Sleep(50)  ; 等待選取動作完成
+            Sleep(50)  ; Allow time for selection to complete
             return
         }
     }
 
-    ; 預設選取所有文字
+    ; Default to selecting all text
     Send("^a")
     Sleep(50)
 }
@@ -142,13 +153,13 @@ GetTextFromClip() {
     }
 
     A_Clipboard := ""
-    Send "^c"
+    Send("^c")
     ClipWait(2)
     text := A_Clipboard
 
     if StrLen(text) < 1 {
         Throw ValueError("No text selected", -1)
-    } else if StrLen(text) > 64000 {
+    } else if StrLen(text) > 128000 {
         Throw ValueError("Text is too long", -1)
     }
 
