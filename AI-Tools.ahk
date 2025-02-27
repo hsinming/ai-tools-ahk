@@ -5,37 +5,37 @@
 
 #Requires AutoHotkey v2.0+
 #singleInstance force
-#Include "_jxon.ahk"
+#Include "_JXON.ahk"
 #include "_Cursor.ahk"
-#Include "_MD2HTML.ahk"
-
+#Include "_MD_Gen.ahk"
 Persistent
 SendMode "Input"
 
-;# init setup
-if not (FileExist("settings.ini")) {
-    api_key := InputBox("Enter your API key", "AI-Tools-AHK : Setup", "W400 H100").value
-    if (api_key == "") {
-        MsgBox("To use this script, you need to enter an API key. Please restart the script and try again.")
-        ExitApp
-    }
-    FileCopy("settings.ini.default", "settings.ini")
-    IniWrite(api_key, ".\settings.ini", "settings", "default_api_key")
-}
-RestoreCursor()
-
-
 ;# globals
+_settingfile := ".\settings.ini"
 _running := false
 _settingsCache := Map()
-_lastModified := FileGetTime("./settings.ini")
+_lastModified := FileGetTime(_settingfile)
 _displayResponse := false
 _activeWin := ""
 _oldClipboard := ""
 _debug := ToBool(GetSetting("settings", "debug", "false"))
 _reload_on_change := ToBool(GetSetting("settings", "reload_on_change", "false"))
 
-;# 
+
+;# init setup
+if not (FileExist(_settingfile)) {
+    api_key := InputBox("Enter your API key", "AI-Tools-AHK : Setup", "W400 H100").value
+    if (api_key == "") {
+        MsgBox("To use this script, you need to enter an API key. Please restart the script and try again.")
+        ExitApp
+    }
+    FileCopy("settings.ini.default", _settingfile)
+    IniWrite(api_key, _settingfile, "settings", "default_api_key")
+}
+RestoreCursor()
+
+;# check settings every 10 seconds
 CheckSettings()
 
 ;# menu
@@ -43,7 +43,6 @@ InitPopupMenu()
 InitTrayMenu()
 
 ;# hotkeys
-
 HotKey GetSetting("settings", "hotkey_1"), (*) => (
     SelectText()
     PromptHandler(GetSetting("settings", "hotkey_1_prompt")))
@@ -96,10 +95,18 @@ PromptHandler(promptName) {
     }
 }
 
-IniReadSection(file, section) {
+IniReadSection(section) {
+    global _settingsCache, _settingfile
+
+    ; Return cached result if available
+    if (_settingsCache.Has(section)) {
+        return _settingsCache[section]
+    }
+
     result := Map()
     insideSection := false
-    loop read file {
+
+    loop read _settingfile {
         line := Trim(A_LoopReadLine)
         if (line = "" || SubStr(line, 1, 1) = ";")  ; Skip empty lines and comments
             continue
@@ -111,10 +118,13 @@ IniReadSection(file, section) {
             result[Trim(match[1])] := Trim(match[2])  ; Store key-value pair
         }
     }
+
+    _settingsCache[section] := result  ; Cache the result
     return result
 }
 
 SelectText() {
+    global _settingfile
     global _oldClipboard := A_Clipboard  ; Save clipboard content
 
     A_Clipboard := ""  ; Clear clipboard
@@ -127,8 +137,8 @@ SelectText() {
         return  ; Return if text was successfully copied
     }
 
-    ; Read all selection methods from settings.ini
-    selectionMethods := IniReadSection("settings.ini", "SelectionMethods")
+    ; Read all selection methods from the settings file
+    selectionMethods := IniReadSection("selection_methods")
     
     ; Loop through all identifiers and select text if the active window matches
     for identifier, selectKeys in selectionMethods {
@@ -167,12 +177,12 @@ GetTextFromClip() {
 }
 
 GetSetting(section, key, defaultValue := "") {
-    global _settingsCache
+    global _settingsCache, _settingfile
     
     if (_settingsCache.Has(section . key . defaultValue)) {
         return _settingsCache.Get(section . key . defaultValue)
     } else {
-        value := IniRead(".\settings.ini", section, key, defaultValue)
+        value := IniRead(_settingfile, section, key, defaultValue)
         if IsNumber(value) {
             value := Number(value)
         } else {
@@ -236,7 +246,8 @@ CallAPI(mode, promptName, input) {
     endpoint := GetSetting(mode, "endpoint")
     apiKey := GetSetting(mode, "api_key", GetSetting("settings", "default_api_key"))
 
-    req := ComObject("Msxml2.ServerXMLHTTP")
+    ;req := ComObject("Msxml2.ServerXMLHTTP")
+    req := ComObject("WinHttp.WinHttpRequest.5.1")
     req.open("POST", endpoint, true)
     req.SetRequestHeader("Content-Type", "application/json")
     req.SetRequestHeader("Authorization", "Bearer " apiKey) ; OpenAI
@@ -255,8 +266,8 @@ CallAPI(mode, promptName, input) {
             MsgBox "Error: Unable to connect to the API. Please check your internet connection and try again.", , 16
             return
         } else if (req.status == 200) { ; OK.
-            data := req.responseText
-            HandleResponse(data, mode, promptName, input)
+            response := req.responseText
+            HandleResponse(response, mode, promptName, input)
         } else {
             RestoreCursor()
             _running := false
@@ -272,14 +283,14 @@ CallAPI(mode, promptName, input) {
     }
 }
 
-HandleResponse(data, mode, promptName, input) {
+HandleResponse(response, mode, promptName, input) {
     global _running, _oldClipboard, _displayResponse, _activeWin
 
     try {
-        LogDebug("data ->`n" data)
-
-        var := Jxon_Load(&data)
-        text := var.Get("choices")[1].Get("message").Get("content", "")
+        response_object := Jxon_Load(&response)
+        LogDebug("response_object ->`n" Jxon_dump(response_object, 4))  
+        
+        text := response_object.Get("choices")[1].Get("message").Get("content", "")
 
         if text == "" {
             MsgBox "No text was generated. Consider modifying your input."
@@ -415,13 +426,13 @@ HandleResponse(data, mode, promptName, input) {
 
 InitPopupMenu() {
     global _iMenu := Menu()  ; Create a new menu object.
-    global _displayResponse
+    global _displayResponse, _settingfile
     iMenuItemParms := Map()
 
     _iMenu.Add("&`` - Display response in new window", NewWindowCheckHandler)
     _iMenu.Add()  ; Add a separator line.
 
-    menu_items := IniRead("./settings.ini", "popup_menu")
+    menu_items := IniRead(_settingfile, "popup_menu")
 
     id := 1
     loop parse menu_items, "`n" {
@@ -499,7 +510,8 @@ OpenGithub(*) {
 }
 
 OpenSettings(*) {
-    Run A_ScriptDir . "\settings.ini"
+    global _settingfile
+    Run A_ScriptDir . _settingfile
 }
 
 ReloadSettings(*) {
@@ -526,9 +538,9 @@ ShowWaitTooltip() {
 }
 
 CheckSettings() {
-    global _lastModified, _reload_on_change
-    if (_reload_on_change and FileExist("./settings.ini")) {
-        lastModified := FileGetTime("./settings.ini")
+    global _lastModified, _reload_on_change, _settingfile
+    if (_reload_on_change and FileExist(_settingfile)) {
+        lastModified := FileGetTime(_settingfile)
         if (lastModified != _lastModified) {
             _lastModified := lastModified
             TrayTip("Settings Updated", "Restarting...", 5)
