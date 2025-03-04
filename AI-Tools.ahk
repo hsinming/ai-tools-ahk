@@ -12,26 +12,26 @@ Persistent
 SendMode "Input"
 
 ;# globals
-_settingfile := ".\settings.ini"
+_settingFile := ".\settings.ini"
 _running := false
 _settingsCache := Map()
-_lastModified := FileGetTime(_settingfile)
+_lastModified := FileGetTime(_settingFile)
 _displayResponse := false
 _activeWin := ""
 _oldClipboard := ""
 _debug := ToBool(GetSetting("settings", "debug", "false"))
-_reload_on_change := ToBool(GetSetting("settings", "reload_on_change", "false"))
+_reload_on_change := ToBool(GetSetting("settings", "reload_on_change", "true"))
 
 
 ;# init setup
-if not (FileExist(_settingfile)) {
+if not (FileExist(_settingFile)) {
     api_key := InputBox("Enter your API key", "AI-Tools-AHK : Setup", "W400 H100").value
     if (api_key == "") {
         MsgBox("To use this script, you need to enter an API key. Please restart the script and try again.")
         ExitApp
     }
-    FileCopy("settings.ini.default", _settingfile)
-    IniWrite(api_key, _settingfile, "settings", "default_api_key")
+    FileCopy("settings.ini.default", _settingFile)
+    IniWrite(api_key, _settingFile, "settings", "default_api_key")
 }
 RestoreCursor()
 
@@ -96,7 +96,7 @@ PromptHandler(promptName) {
 }
 
 IniReadSection(section) {
-    global _settingsCache, _settingfile
+    global _settingsCache, _settingFile
 
     ; Return cached result if available
     if (_settingsCache.Has(section)) {
@@ -106,7 +106,7 @@ IniReadSection(section) {
     result := Map()
     insideSection := false
 
-    loop read _settingfile {
+    loop read _settingFile {
         line := Trim(A_LoopReadLine)
         if (line = "" || SubStr(line, 1, 1) = ";")  ; Skip empty lines and comments
             continue
@@ -124,7 +124,7 @@ IniReadSection(section) {
 }
 
 SelectText() {
-    global _settingfile
+    global _settingFile
     global _oldClipboard := A_Clipboard  ; Save clipboard content
 
     A_Clipboard := ""  ; Clear clipboard
@@ -177,12 +177,12 @@ GetTextFromClip() {
 }
 
 GetSetting(section, key, defaultValue := "") {
-    global _settingsCache, _settingfile
+    global _settingsCache, _settingFile
     
     if (_settingsCache.Has(section . key . defaultValue)) {
         return _settingsCache.Get(section . key . defaultValue)
     } else {
-        value := IniRead(_settingfile, section, key, defaultValue)
+        value := IniRead(_settingFile, section, key, defaultValue)
         if IsNumber(value) {
             value := Number(value)
         } else {
@@ -246,14 +246,13 @@ CallAPI(mode, promptName, input) {
     endpoint := GetSetting(mode, "endpoint")
     apiKey := GetSetting(mode, "api_key", GetSetting("settings", "default_api_key"))
 
-    ;req := ComObject("Msxml2.ServerXMLHTTP")
-    req := ComObject("WinHttp.WinHttpRequest.5.1")
+    req := ComObject("Msxml2.ServerXMLHTTP")
     req.open("POST", endpoint, true)
     req.SetRequestHeader("Content-Type", "application/json")
     req.SetRequestHeader("Authorization", "Bearer " apiKey) ; OpenAI
     req.SetRequestHeader("api-key", apiKey) ; Azure
     req.SetRequestHeader('Content-Length', StrLen(bodyJson))
-    req.SetRequestHeader("If-Modified-Since", "Sat, 1 Jan 2000 00:00:00 GMT")
+    req.SetRequestHeader("If-Modified-Since", "Sat, 1 Jan 2000 00:00:00 GMT")    
     req.SetTimeouts(0, 0, 0, GetSetting("settings", "timeout", 120) * 1000) ; read, connect, send, receive
 
     try {
@@ -266,7 +265,7 @@ CallAPI(mode, promptName, input) {
             MsgBox "Error: Unable to connect to the API. Please check your internet connection and try again.", , 16
             return
         } else if (req.status == 200) { ; OK.
-            response := req.responseText
+            response := req.responseText   ; UTF-8 by default
             HandleResponse(response, mode, promptName, input)
         } else {
             RestoreCursor()
@@ -426,13 +425,13 @@ HandleResponse(response, mode, promptName, input) {
 
 InitPopupMenu() {
     global _iMenu := Menu()  ; Create a new menu object.
-    global _displayResponse, _settingfile
+    global _displayResponse, _settingFile
     iMenuItemParms := Map()
 
     _iMenu.Add("&`` - Display response in new window", NewWindowCheckHandler)
     _iMenu.Add()  ; Add a separator line.
 
-    menu_items := IniRead(_settingfile, "popup_menu")
+    menu_items := IniRead(_settingFile, "popup_menu")
 
     id := 1
     loop parse menu_items, "`n" {
@@ -510,8 +509,8 @@ OpenGithub(*) {
 }
 
 OpenSettings(*) {
-    global _settingfile
-    Run A_ScriptDir . _settingfile
+    global _settingFile
+    Run A_ScriptDir . _settingFile
 }
 
 ReloadSettings(*) {
@@ -538,9 +537,9 @@ ShowWaitTooltip() {
 }
 
 CheckSettings() {
-    global _lastModified, _reload_on_change, _settingfile
-    if (_reload_on_change and FileExist(_settingfile)) {
-        lastModified := FileGetTime(_settingfile)
+    global _lastModified, _reload_on_change, _settingFile
+    if (_reload_on_change and FileExist(_settingFile)) {
+        lastModified := FileGetTime(_settingFile)
         if (lastModified != _lastModified) {
             _lastModified := lastModified
             TrayTip("Settings Updated", "Restarting...", 5)
