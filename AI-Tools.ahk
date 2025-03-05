@@ -373,8 +373,9 @@ HandleResponse(response, mode, promptName, input) {
             MyGui.OnEvent("Size", Gui_Size)
         } else {
             WinActivate(_activeWin)
+            text := Trim(text, "`n")  ; remove leading/trailing newlines
             A_Clipboard := text
-            send "^v"
+            Send("^v")
         }
 
         _running := false
