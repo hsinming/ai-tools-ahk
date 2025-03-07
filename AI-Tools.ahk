@@ -168,6 +168,22 @@ GetTextFromClip() {
     text := A_Clipboard
 
     if StrLen(text) < 1 {
+        ; 1. Try to get text from the focused control explicitly
+        focusedControl := ControlGetFocus("A")  ; Get the focused control's identifier
+        if focusedControl != "" {  ; Check if a focused control was found
+            focusedControlText := ControlGetText(focusedControl, "A")  ; Get text from the focused control
+            if StrLen(focusedControlText) > 0 {
+                return focusedControlText
+            }
+        }
+
+        ; 2. If getting text from the focused control fails, try the "topmost" control as a fallback
+        topmostControlText := ControlGetText("", "A")  ; Get text from the "topmost" control
+        if StrLen(topmostControlText) > 0 {
+            return topmostControlText
+        }
+
+        ; 3. If both fail, then we couldn't get text
         Throw ValueError("No text selected", -1)
     } else if StrLen(text) > 128000 {
         Throw ValueError("Text is too long", -1)
