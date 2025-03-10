@@ -21,6 +21,7 @@ _activeWin := ""
 _oldClipboard := ""
 _debug := ToBool(GetSetting("settings", "debug", "false"))
 _reload_on_change := ToBool(GetSetting("settings", "reload_on_change", "true"))
+_styleCSS := FileRead(".\style.css")
 
 
 ;# init setup
@@ -268,7 +269,8 @@ CallAPI(mode, promptName, input) {
     req.SetRequestHeader("Authorization", "Bearer " apiKey) ; OpenAI
     req.SetRequestHeader("api-key", apiKey) ; Azure
     req.SetRequestHeader('Content-Length', StrLen(bodyJson))
-    req.SetRequestHeader("If-Modified-Since", "Sat, 1 Jan 2000 00:00:00 GMT")    
+    req.SetRequestHeader("If-Modified-Since", "Sat, 1 Jan 2000 00:00:00 GMT")
+    req.SetRequestHeader("X-Title", "AI-Tools-AHK")  ; OpenRouter Activity ranking
     req.SetTimeouts(0, 0, 0, GetSetting("settings", "timeout", 120) * 1000) ; read, connect, send, receive
 
     try {
@@ -299,7 +301,7 @@ CallAPI(mode, promptName, input) {
 }
 
 HandleResponse(response, mode, promptName, input) {
-    global _running, _oldClipboard, _displayResponse, _activeWin
+    global _running, _oldClipboard, _displayResponse, _activeWin, _styleCSS
 
     try {
         response_object := Jxon_Load(&response)
@@ -338,58 +340,58 @@ HandleResponse(response, mode, promptName, input) {
             MyGui.SetFont("s13")
             MyGui.Opt("+AlwaysOnTop +Owner +Resize")  ; +Owner avoids a taskbar button.
 
-            ; 設定初始窗口大小（避免顯示時大小為 0）
+            ; Set the initial size of the GUI
             InitWidth := 800
             InitHeight := 600            
-            margin := 10  ; 控件間的間距
-            ButtonWidth := 80  ; 按鈕寬度
-            ButtonHeight := 30  ; 按鈕高度
+            margin := 10  
+            ButtonWidth := 80
+            ButtonHeight := 30
 
-            ; 添加 Tab 控件
+            ; Add Tab control
             TabCtrl := MyGui.Add("Tab3", "x" margin " y" margin " w" InitWidth - 2*margin " h" InitHeight - 2*margin - ButtonHeight - 2*margin, ["Web View", "Text View"])
             
-            ; 設定頁籤內控件的基準 y 座標，向下移動一點點，避免被標籤遮擋
-            tabYOffset := 25  ; 調整此值讓內容完整顯示
-
+            ; Set Y offset to avoid overlapping with the tab control
+            tabYOffset := 25
+            
             ; -------------------
-            ; Web View (頁籤1)
+            ; Web View (Tab 1)
             ; -------------------
-            TabCtrl.UseTab(1) ; 選擇第一個頁籤
+            TabCtrl.UseTab(1)
 
-            ; 在第一個頁籤添加 ActiveX 控件
-            ogcActiveXWBC := MyGui.Add("ActiveX", "x" margin " y" tabYOffset + margin " w" InitWidth - 4*margin " h" InitHeight - 4*margin - ButtonHeight - 2*margin, "Shell.Explorer")
-            css := FileRead("style.css")
-            options := {css: css, font_name: "Segoe UI", font_size: 16, font_weight: 400, line_height: "1.6"}
+            ; Add ActiveX control
+            ogcActiveXWBC := MyGui.Add("ActiveX", "x" margin " y" tabYOffset + margin " w" InitWidth - 4*margin " h" InitHeight - 4*margin - ButtonHeight - 2*margin, "Shell.Explorer")            
+            options := {css: _styleCSS, font_name: "Segoe UI", font_size: 16, font_weight: 400, line_height: "1.6"}
             html := make_html(text, options, true)
             WB := ogcActiveXWBC.Value
             WB.Navigate("about:blank")            
             WB.document.write(html)
 
             ; -------------------
-            ; Text View (頁籤2)
+            ; Text View (Tab 2)
             ; -------------------
             TabCtrl.UseTab(2)
 
+            ; Add Edit control
             xEdit := MyGui.Add("Edit", "x" margin " y" tabYOffset + margin " w" InitWidth - 4*margin " h" InitHeight - 4*margin - ButtonHeight - 2*margin " vMyEdit Wrap", text)
 
-            ; 返回到 Tab 控件
+            ; Add controls outside of the Tab control
             TabCtrl.UseTab()
 
-            ; 添加 Copy 和 Close 按鈕
+            ; Add Copy button and Close button
             xCopy := MyGui.Add("Button", "x" InitWidth - ButtonWidth * 2 - 2*margin " y" InitHeight - ButtonHeight - 2*margin " w" ButtonWidth " h" ButtonHeight, "Copy")
             xCopy.OnEvent("Click", (*) => CopyText(xEdit))
 
             xClose := MyGui.Add("Button", "x" InitWidth - ButtonWidth - margin " y" InitHeight - ButtonHeight - 2*margin " w" ButtonWidth " h" ButtonHeight " Default", "Close")
             xClose.OnEvent("Click", (*) => MyGui.Destroy())
 
-            ; 顯示 GUI
+            ; Show GUI 
             MyGui.Show("w" InitWidth " h" InitHeight " NoActivate Center")
 
-            ; 設置 GUI 大小變更事件
+            ; Set Resize event
             MyGui.OnEvent("Size", Gui_Size)
         } else {
             WinActivate(_activeWin)
-            text := Trim(text, "`n")  ; remove leading/trailing newlines
+            text := Trim(text, "`n")  ; Remove leading/trailing newlines
             A_Clipboard := text
             Send("^v")
         }
@@ -405,38 +407,32 @@ HandleResponse(response, mode, promptName, input) {
     }
     
     Gui_Size(thisGui, MinMax, Width, Height) {  
-        if MinMax == -1  ; 如果最小化，則不做任何操作
+        if MinMax == -1  ; if minimized, do nothing
             return
     
-        ; 計算頁籤控件的大小和位置
+        ; Calculate the new size of the GUI
         TabCtrlWidth := Width - 2 * margin
         TabCtrlHeight := Height - 2 * margin - ButtonHeight - margin
     
-        ; 調整頁籤控件大小
+        ; Move the Tab control to the new position
         TabCtrl.Move(margin, margin, TabCtrlWidth, TabCtrlHeight)
     
-        ; 計算頁籤內部控件的大小和位置
+        ; Calculate the new size of the ActiveX, Edit, Copy, and Close controls
         ControlWidth := TabCtrlWidth - 2 * margin
         ControlHeight := TabCtrlHeight - 2 * margin
     
-        ; 調整 ActiveX 控件大小
+        ; Move the ActiveX, Edit, Copy, and Close controls to the new position    
         ogcActiveXWBC.Move(margin, tabYOffset + margin, ControlWidth, ControlHeight)
-    
-        ; 調整 Edit 控件大小
         xEdit.Move(margin, tabYOffset + margin, ControlWidth, ControlHeight)
-    
-        ; 調整 Copy 按鈕位置
         xCopy.Move(Width - ButtonWidth * 2 - 2 * margin, Height - ButtonHeight - margin, ButtonWidth, ButtonHeight)
-    
-        ; 調整 Close 按鈕位置
         xClose.Move(Width - ButtonWidth - margin, Height - ButtonHeight - margin, ButtonWidth, ButtonHeight)
     }
     
     CopyText(edit) {
         A_Clipboard := edit.Text
         MouseGetPos(&mouseX, &mouseY)
-        ToolTip("✔ Copied!", mouseX + 10, mouseY + 10)  ; 在游標附近顯示提示
-        SetTimer () => ToolTip(), -1000  ; 設定 1 秒後自動清除 ToolTip
+        ToolTip("✔ Copied!", mouseX + 10, mouseY + 10)  ; Show a tooltip near the mouse cursor
+        SetTimer () => ToolTip(), -1000  ; Set a timer to hide the tooltip after 1 second
     }
 }
 
