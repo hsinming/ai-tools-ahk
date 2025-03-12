@@ -80,9 +80,10 @@ PromptHandler(promptName) {
         
         try {
             input := GetTextFromClip()
-        } catch {
+        } catch as err {
             _running := false
             RestoreCursor()
+            MsgBox Format("{1}: {2}", Type(err), err.Message), , 16
             return
         }        
         
@@ -92,7 +93,7 @@ PromptHandler(promptName) {
     } catch as err {
         _running := false
         RestoreCursor()
-        MsgBox Format("{1}: {2}.`n`nFile:`t{3}`nLine:`t{4}`nWhat:`t{5}", type(err), err.Message, err.File, err.Line, err.What), , 16
+        MsgBox Format("{1}: {2}.`n`nFile:`t{3}`nLine:`t{4}`nWhat:`t{5}", Type(err), err.Message, err.File, err.Line, err.What), , 16
     }
 }
 
@@ -270,7 +271,6 @@ CallAPI(mode, promptName, input) {
     req.SetRequestHeader("api-key", apiKey) ; Azure
     req.SetRequestHeader('Content-Length', StrLen(bodyJson))
     req.SetRequestHeader("If-Modified-Since", "Sat, 1 Jan 2000 00:00:00 GMT")
-    req.SetRequestHeader("X-Title", "AI-Tools-AHK")  ; OpenRouter Activity ranking
     req.SetTimeouts(0, 0, 0, GetSetting("settings", "timeout", 120) * 1000) ; read, connect, send, receive
 
     try {
@@ -294,8 +294,8 @@ CallAPI(mode, promptName, input) {
     } catch as e {
         RestoreCursor()
         _running := false
-        MsgBox "Error: " "Exception thrown!`n`nwhat: " e.what "`nfile: " e.file 
-        . "`nline: " e.line "`nmessage: " e.message "`nextra: " e.extra, , 16
+        MsgBox "Error: " "Exception thrown!`n`nwhat: " e.What "`nfile: " e.File 
+        . "`nline: " e.Line "`nmessage: " e.Message "`nextra: " e.Extra, , 16
         return
     }
 }
@@ -318,11 +318,11 @@ HandleResponse(response, mode, promptName, input) {
         text := StrReplace(text, '`r', "") ; remove carriage returns
         replaceSelected := ToBool(GetSetting(promptName, "replace_selected", "true"))
         
-        if not replaceSelected {
+        if not replaceSelected {  ; Append Mode
             responseStart := GetSetting(promptName, "response_start", "")
             responseEnd := GetSetting(promptName, "response_end", "")
             text := input . responseStart . text . responseEnd
-        } else {
+        } else {  ; Replace Mode
             ;# Remove leading newlines
             while SubStr(text, 1, 1) == '`n' {
                 text := SubStr(text, 2)
