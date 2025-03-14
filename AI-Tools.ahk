@@ -79,10 +79,10 @@ PromptHandler(promptName) {
         SetSystemCursor(GetSetting("settings", "cursor_wait_file", "wait"))
         
         try {
-            input := GetTextFromClip()
+            input := GetSelectedText()
         } catch as err {
-            _running := false
             RestoreCursor()
+            _running := false            
             MsgBox Format("{1}: {2}", Type(err), err.Message), , 16
             return
         }        
@@ -91,8 +91,8 @@ PromptHandler(promptName) {
         CallAPI(mode, promptName, input)
 
     } catch as err {
-        _running := false
         RestoreCursor()
+        _running := false        
         MsgBox Format("{1}: {2}.`n`nFile:`t{3}`nLine:`t{4}`nWhat:`t{5}", Type(err), err.Message, err.File, err.Line, err.What), , 16
     }
 }
@@ -108,7 +108,7 @@ IniReadSection(section) {
     result := Map()
     insideSection := false
 
-    loop read _settingFile {
+    Loop Read _settingFile {
         line := Trim(A_LoopReadLine)
         if (line = "" || SubStr(line, 1, 1) = ";")  ; Skip empty lines and comments
             continue
@@ -125,71 +125,101 @@ IniReadSection(section) {
     return result
 }
 
-SelectText() {
-    global _settingFile
-    global _oldClipboard := A_Clipboard  ; Save clipboard content
+RestoreClipboard() {
+    global _oldClipboard
+    A_Clipboard := _oldClipboard
+    _oldClipboard := ""
+}
 
-    A_Clipboard := ""  ; Clear clipboard
-    Send("^c")  ; Try copying text using Ctrl+C
-    ClipWait(2)  ; Wait for clipboard update
-
-    text := A_Clipboard   
-
-    if StrLen(text) > 0 {
-        return  ; Return if text was successfully copied
+BackupClipboard() {
+    global _oldClipboard
+    ; Backup clipboard only if it's not already backed up
+    if _oldClipboard == "" {
+        _oldClipboard := A_Clipboard
     }
+}
 
-    ; Read all selection methods from the settings file
-    selectionMethods := IniReadSection("selection_methods")
+GetSelectedTextFromControl() {
+    focusedControl := ControlGetFocus("A")  ; Get the ClassNN of the focused control
+    if !focusedControl
+        return ""  ; No control is focused, return empty string
+
+    hwnd := ControlGetHwnd(focusedControl, "A")  ; Get the HWND of the focused control
+
+    ; Send EM_GETSEL message to get the selection range
+    result := DllCall("User32.dll\SendMessageW", "Ptr", hwnd, "UInt", 0xB0, "Ptr", 0, "Ptr", 0, "UInt")
+
+    selStart := result & 0xFFFF  ; Lower 16 bits contain the start index
+    selEnd := result >> 16       ; Upper 16 bits contain the end index
+
+    ; Retrieve the full text of the control
+    controlText := ControlGetText(hwnd, "A")
+
+    return SubStr(controlText, selStart + 1, selEnd - selStart)
+}
+
+SelectText() {
+    BackupClipboard()
+
+    ; 1️⃣ Try to copy selected text using Ctrl+C
+    A_Clipboard := ""  ; Clear clipboard
+    Send("^c")
+    ClipWait(2)
+
+    if A_Clipboard != "" { ; If text was copied, restore clipboard and exit
+        RestoreClipboard()
+        return
+    }
     
-    ; Loop through all identifiers and select text if the active window matches
+    ; 2️⃣ Try predefined selection methods from settings
+    selectionMethods := IniReadSection("selection_methods")
     for identifier, selectKeys in selectionMethods {
-        if WinActive(identifier) {
+        if WinActive(identifier) {  ; If the active window matches a rule
             Send(selectKeys)
             Sleep(50)  ; Allow time for selection to complete
+            RestoreClipboard()
             return
         }
     }
 
-    ; Default to selecting all text
+    ; 3️⃣ Final fallback: Select all text using Ctrl+A
     Send("^a")
     Sleep(50)
+    RestoreClipboard()
 }
 
-GetTextFromClip() {
-    global _oldClipboard, _activeWin
+GetSelectedText() {
+    global _activeWin
+    _activeWin := WinGetTitle("A")    ; Used in HandleResponse()
 
-    _activeWin := WinGetTitle("A")
-    if _oldClipboard == "" {
-        _oldClipboard := A_Clipboard
-    }
+    ; Initialize text variable
+    text := ""
 
+    ; 1. Try copying text using Ctrl+C
+    BackupClipboard()
     A_Clipboard := ""
     Send("^c")
     ClipWait(2)
-    text := A_Clipboard
+    text := A_Clipboard    
+    RestoreClipboard()
 
+    ; 2. If clipboard is empty, try getting selected text from the focused control
+    if StrLen(text) < 1
+        text := GetSelectedTextFromControl()
+
+    ; 3. If still empty, try getting all text from the focused control
     if StrLen(text) < 1 {
-        ; 1. Try to get text from the focused control explicitly
-        focusedControl := ControlGetFocus("A")  ; Get the focused control's identifier
-        if focusedControl != "" {  ; Check if a focused control was found
-            focusedControlText := ControlGetText(focusedControl, "A")  ; Get text from the focused control
-            if StrLen(focusedControlText) > 0 {
-                return focusedControlText
-            }
-        }
+        focusedControl := ControlGetFocus("A")  ; Get focused control's identifier
+        if focusedControl
+            text := ControlGetText(focusedControl, "A")
+    }    
 
-        ; 2. If getting text from the focused control fails, try the "topmost" control as a fallback
-        topmostControlText := ControlGetText("", "A")  ; Get text from the "topmost" control
-        if StrLen(topmostControlText) > 0 {
-            return topmostControlText
-        }
-
-        ; 3. If both fail, then we couldn't get text
-        Throw ValueError("No text selected", -1)
-    } else if StrLen(text) > 128000 {
+    ; Final checks:
+    if StrLen(text) > 128000
         Throw ValueError("Text is too long", -1)
-    }
+    
+    if StrLen(text) < 1
+        Throw ValueError("No text selected", -1)
 
     return text
 }
@@ -270,7 +300,7 @@ CallAPI(mode, promptName, input) {
     req.SetRequestHeader("Authorization", "Bearer " apiKey) ; OpenAI
     req.SetRequestHeader("api-key", apiKey) ; Azure
     req.SetRequestHeader('Content-Length', StrLen(bodyJson))
-    req.SetRequestHeader("If-Modified-Since", "Sat, 1 Jan 2000 00:00:00 GMT")
+    req.SetRequestHeader("If-Modified-Since", "Sat, 1 Jan 2000 00:00:00 GMT")    
     req.SetTimeouts(0, 0, 0, GetSetting("settings", "timeout", 120) * 1000) ; read, connect, send, receive
 
     try {
@@ -301,7 +331,7 @@ CallAPI(mode, promptName, input) {
 }
 
 HandleResponse(response, mode, promptName, input) {
-    global _running, _oldClipboard, _displayResponse, _activeWin, _styleCSS
+    global _running, _displayResponse, _activeWin, _styleCSS
 
     try {
         response_object := Jxon_Load(&response)
@@ -390,20 +420,16 @@ HandleResponse(response, mode, promptName, input) {
             ; Set Resize event
             MyGui.OnEvent("Size", Gui_Size)
         } else {
-            WinActivate(_activeWin)
-            text := Trim(text, "`n")  ; Remove leading/trailing newlines
-            A_Clipboard := text
+            WinActivate(_activeWin)            
+            BackupClipboard()
+            A_Clipboard := Trim(text, "`n")  ; Remove leading/trailing newlines
             Send("^v")
-        }
-
-        _running := false
-        Sleep 500       
-        
+            Sleep 500
+            RestoreClipboard()    
+        }        
     } finally {
-        _running := false
-        A_Clipboard := _oldClipboard
-        _oldClipboard := ""
         RestoreCursor()
+        _running := false        
     }
     
     Gui_Size(thisGui, MinMax, Width, Height) {  
@@ -447,7 +473,7 @@ InitPopupMenu() {
     menu_items := IniRead(_settingFile, "popup_menu")
 
     id := 1
-    loop parse menu_items, "`n" {
+    Loop Parse menu_items, "`n" {
         v_promptName := A_LoopField
         if (v_promptName != "" and SubStr(v_promptName, 1, 1) != "#") {
             if (v_promptName == "-") {
