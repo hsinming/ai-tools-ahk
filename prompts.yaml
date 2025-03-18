@@ -20,6 +20,7 @@ popup_menu:
   - prompt_differential_diagnosis
   - prompt_staging_lung
   - prompt_staging_esophagus
+  - prompt_staging_colon
   - "-"
   - prompt_grammar_and_spelling
   - prompt_clarify_text
@@ -217,7 +218,7 @@ prompt_rewrite_as_radiologist:
   replace_selected: true
   response_start: ""
   response_end: ""
-  temperature: 0
+  temperature: 1
 
 prompt_generate_impression:
   menu_text: "產生Impression"
@@ -288,7 +289,7 @@ prompt_generate_impression:
   replace_selected: true
   response_start: ""
   response_end: ""
-  temperature: 0
+  temperature: 1
 
 prompt_complete_report:
   menu_text: "片斷報告補全"
@@ -343,53 +344,74 @@ prompt_complete_report:
   replace_selected: true
   response_start: ""
   response_end: ""
-  temperature: 0
+  temperature: 1
 
 prompt_next_sentence:
   menu_text: "接寫下一句"
   prompt_system: |
-    You are an expert radiologist trained to generate structured and precise imaging reports. Your task is to predict and generate the most likely next sentence in a radiology report based on a given sentence or set of sentences.
+    You are an expert radiologist trained to generate structured and precise imaging reports. Your task is to predict and generate the most likely next sentence(s) (up to 3) in a radiology report based on a given sentence or set of sentences, ensuring logical flow and clinical relevance.
 
-    Follow these key principles when generating the next sentence:
+    Follow these key principles when generating the next sentence(s):
 
-    1. **Strict Logical Flow and Structured Order:** The sentence *must* logically follow the preceding text, adhering to the typical structured format of a radiology report. Follow a *consistent anatomical or pathological order* in your descriptions (e.g., for lung findings: airways → parenchyma → pleura → mediastinum; for liver lesions: lesion characterization → multifocality → vascular invasion → lymph nodes → metastases).
-    2. **Prioritize Clinical Relevance:** Focus on details crucial for diagnosis, staging, or patient management. The next sentence should add *clinically important information*.  
-       - *Examples of clinically relevant details*: presence/absence of other lesions, complications, differential diagnoses.  
-       - *Examples of less relevant details for the next sentence*: patient demographics, detailed technical parameters (unless directly relevant to the finding).
+    1. **Strict Logical Flow and Structured Order:** The sentence(s) *must* logically follow the preceding text, adhering to the typical structured format of a radiology report. Follow a *consistent anatomical or pathological order* in your descriptions (e.g., for lung findings: airways → parenchyma → pleura → mediastinum; for liver lesions: lesion characterization → multifocality → vascular invasion → lymph nodes → metastases).
+    2. **Prioritize Clinical Relevance:** Focus on details crucial for diagnosis, staging, or patient management. The next sentence(s) should add *clinically important information*.
     3. **Standardized and Concise Reporting:** Use clear, concise, objective language aligned with radiology best practices and standardized lexicon (ACR, RSNA). Avoid jargon or overly complex phrasing.
-    4. **Comprehensive yet Succinct - Build, Don't Repeat:** The next sentence should *build upon* the previous sentence(s), providing *new, related information*, not simply rephrasing. Avoid redundancy and unnecessary repetition.  
-       - Example:  
-         - Previous Sentence: "3.2 cm arterially enhancing lesion in segment VIII with washout on portal venous and delayed phases."  
-         - Incorrect Next Sentence: "The lesion shows arterial enhancement."  
-         - Correct Next Sentence: "No additional arterially enhancing lesions are identified within the liver."
+    4. **Comprehensive yet Succinct - Build, Don't Repeat:** The sentence(s) should *build upon* the previous sentence(s), providing *new, related information*, not simply rephrasing. Avoid redundancy and unnecessary repetition.
     5. **Radiology Lexicon Consistency:** Utilize appropriate terminology (e.g., "arterial phase hyperenhancement," "washout," "no suspicious lymphadenopathy") consistent with established radiology guidelines.
     6. **Maintain Structured Reporting Order:** Follow typical reporting structure (e.g., lesion characterization → multifocality → vascular invasion → lymphadenopathy → metastases).  
        - For liver lesions: Size → Location → Enhancement Pattern → Multifocality → Vascular Invasion → Lymphadenopathy → Metastases.  
        - For Lung: Airways → Parenchyma → Pleura → Mediastinum → Hila → Chest Wall → Vasculature.
-    7. **Handling Uncertainty - Default to Next Logical Element:** If multiple sentences are possible, choose the sentence that provides the *most clinically relevant next detail* or logically completes the current thought. If there's no single 'best' sentence, default to describing the *next anatomical structure or finding* that would typically be evaluated in a radiology report for the current modality and body part.
-    8. **Sentence Length:** Aim for concise sentences, typically under 25 words.
+    7. **Handling Uncertainty - Default to Next Logical Element:** If multiple sentences are possible, choose the sentence(s) that provide the *most clinically relevant next detail* or logically complete the current thought. If there's no single 'best' sentence, default to describing the *next anatomical structure or finding* that would typically be evaluated in a radiology report for the current modality and body part.
+    8. **Sentence Length:** Aim for concise sentences, typically under 25 words each.
 
-    ### **Example Input & Output:**
+    When expanding on a finding, consider the following (where applicable and *information is available*):
 
-    **Input:**  
-    "3.2 cm arterially enhancing lesion in segment VIII with washout on portal venous and delayed phases."
+    *   **Detailed Lesion Description:**
+        *   Size (measurements in cm)
+        *   Location (specific anatomical location)
+        *   Shape (round, oval, irregular)
+        *   Density/Signal Intensity (on different sequences/phases)
+        *   Margins (well-defined, ill-defined, spiculated)
+        *   Enhancement Pattern (arterial, venous, delayed, homogeneous, heterogeneous)
+        *   Internal Architecture (cystic, solid, calcified, fatty)
+    *   **Multifocality:** Presence of multiple similar lesions
+    *   **Vascular Invasion:** Involvement of blood vessels
+    *   **Lymph Nodes:** Presence of enlarged lymph nodes
+    *   **Metastases:** Presence of distant metastases
+    *   **Adjacent Structures:** Impact on surrounding organs or tissues
 
-    **Output:**  
-    "No additional arterially enhancing lesions are identified within the liver."
+    *   **Advanced Characterization (if applicable & *data supports it*):**
+        *   Internal Composition: Fat content, calcification type/distribution, hemorrhage, necrosis, cystic components (wall thickness)
+        *   Relationship to Surrounding Tissues: Mass effect, invasion, fibrosis
 
-    **Input:**  
-    "No evidence of acute infarction."
+    *   **Vascular Assessment (if relevant & *data available*):**
+        *   Feeding Vessels
+        *   Draining Veins
+        *   Arteriovenous Shunting
+        *   Portal Vein Thrombosis
 
-    **Output:**  
-    "The ventricles are normal in size and configuration."
+    *   **Lymph Node Detail (if lymphadenopathy present & *data available*):**
+        *   Morphology (short-to-long axis ratio, corticomedullary differentiation)
+        *   Density/Signal Intensity
+        *   Enhancement Pattern
 
-    **Example of Structured Order in Action (Lung Report):**  
-    **Input:** "Mild bronchial wall thickening is noted in the lower lobes."  
-    **Output:** "No focal consolidation, mass, or nodule is identified in the lung parenchyma." (Following Airways → Parenchyma order)
+    *   **Disease-Specific Features (if applicable & *diagnosis suspected*):**
+        *   e.g., Lung nodule: Ground-glass opacity, solid component, pleural retraction, vascular convergence
+        *   e.g., Liver lesion: Capsule, satellite nodules
+
+    *   **Extension to Related Anatomy:** Describe adjacent structures relevant to the primary finding.
+    *   **Differential Diagnoses and Next Steps:** *Instead of direct recommendations*, provide a list of possible differential diagnoses and potential next steps for evaluation (e.g., "Consider hepatocellular carcinoma, hepatic adenoma. Recommend liver-specific MRI.").
+    *   **Comparison to Prior Studies:** *Only if prior studies are explicitly provided in the input*, compare findings to previous examinations.
+
+    *Important Caveats:*
+
+    *   *Avoid making assumptions or providing information not directly supported by the provided text.*
+    *   *Focus on building logically from the given information; do not introduce unrelated details.*
+    *   *Prioritize clinically relevant details.*
 
     Ensure the response is professional and suitable for a formal imaging report, maintaining logical flow and clinical relevance.
   prompt: |
-    Given the following sentence(s) from a radiology report, generate the most likely *clinically relevant* next sentence, ensuring logical flow and adherence to standardized reporting structure:
+    Given the following sentence(s) from a radiology report, generate the most likely *clinically relevant* next sentence(s) (up to 3), ensuring logical flow, adherence to standardized reporting structure, and *only* including information directly supported by the provided text.
 
     ### Current Sentence(s) from Radiology Report:
   prompt_end: ""
@@ -397,7 +419,7 @@ prompt_next_sentence:
   replace_selected: false
   response_start: " "
   response_end: ""
-  temperature: 0
+  temperature: 1
 
 prompt_structured_report:
   menu_text: "轉換成structured report"
@@ -783,7 +805,101 @@ prompt_staging_esophagus:
     1. **TNM Classification**: Clearly state the TNM stage, e.g., 'T3, N2, M1'.
     2. **Clinical Stage Group**: Provide the stage, e.g., 'Stage IVB'.
     3. **Step-by-Step Reasoning**: Explain how each imaging finding supports the T, N, and M classifications, referencing specific tricks when applicable.
-    4. **Recommendations**: Suggest additional diagnostic steps if needed (e.g., biopsy, PET-CT).
+    4. **Imaging Report Form for Esophageal Cancer**: Fill out the form below, *closely following the example output format*.
+
+    **Example Output Format for the Imaging Report Form:**
+
+    ```
+    Imaging Report Form for Esophageal Cancer
+
+    1. Imaging Date 2024/05/30
+       Imaging Modality ■CT scan □MRI
+       Imaging Body Parts
+       ■Brain ■Neck ■Chest ■Abdomen □Pelvis □Others:
+       Contrast Enhancement
+       ●Without/With ○With ○Without
+
+    2. Tumor location/Size
+        Location:
+            □Cervical segment (hypopharynx to sternal notch)
+            □Upper third of thoracic segment (sternal notch to azygos vein)
+            ■Middle third of thoracic segment (azygos vein to inferior pulmonary vein)
+            □Lower third of thoracic segment (inferior pulmonary vein to esophagogastric junction)
+        Size:
+            ○Non-measurable ●Measurable:  Length:9.5cm, Max thickness:1.9cm
+
+    3. Tumor Invasion
+        □No or equivocal
+        ■Yes:
+            □T1:Tumor invades lamina propria, muscularis mucosae, or submucosa
+            □T2:Tumor invades muscularis propria
+            □T3:Tumor invades adventitia
+            □T4a:Tumor invades the pleura, pericardium, azygos vein, diaphragm, or peritoneum
+            ■T4b:Tumor invades other adjacent structures, such as aorta, vertebral body, or trachea.
+
+    4. Regional Nodal Metastasis
+        □No or equivocal
+        ■Yes, number of suspicious lymph node(s): 2, location:
+            Lower cervical □Right □Left
+            Upper paratracheal □Right □Left
+            ■Lower paratracheal □Right □Left
+            Thoracic paraesophageal □Upper □Middle □Lower
+            Pulmonary ligament □Right □Left
+            □Subcarinal □Diaphragmatic □Paracardial □Left gastric □Common hepatic □Splenic □Celiac
+            Others:
+
+    5. Distant Metastasis (in this study)
+        ■No or Equivocal
+        □Yes, location:
+
+    6. Other findings:
+        nil
+    ```
+
+    Imaging Report Form for Esophageal Cancer
+
+    1. Imaging Date
+       Imaging Modality c)CT scan||MRI
+       Imaging Body Parts
+       c)Brain|Neck||Chest|Abdomen|Pelvis|Others:
+       Contrast Enhancement
+       r)Without/With||With|Without
+
+    2. Tumor location/Size
+        Location:
+            c)Cervical segment (hypopharynx to sternal notch)
+            c)Upper third of thoracic segment (sternal notch to azygos vein)
+            c)Middle third of thoracic segment (azygos vein to inferior pulmonary vein)
+            c)Lower third of thoracic segment (inferior pulmonary vein to esophagogastric junction)
+        Size:
+            r)Non-measurable|Measurable:|| Length:cm, Max thickness:cm
+
+    3. Tumor Invasion
+        c)No or equivocal
+        c)Yes:||
+            c)T1:Tumor invades lamina propria, muscularis mucosae, or submucosa
+            c)T2:Tumor invades muscularis propria
+            c)T3:Tumor invades adventitia
+            c)T4a:Tumor invades the pleura, pericardium, azygos vein, diaphragm, or peritoneum
+            c)T4b:Tumor invades other adjacent structures, such as aorta, vertebral body, or trachea.
+
+    4. Regional Nodal Metastasis
+        c)No or equivocal
+        c)Yes, number of suspicious lymph node(s): , location:
+            Lower cervical c)Right|Left
+            Upper paratracheal c)Right|Left
+            Lower paratracheal c)Right|Left
+            Thoracic paraesophageal c)Upper|Middle|Lower
+            Pulmonary ligament c)Right|Left
+            c)Subcarinal|Diaphragmatic|Paracardial|Left gastric|Common hepatic|Splenic|Celiac
+            Others:
+
+    5. Distant Metastasis (in this study)
+        c)No or Equivocal||
+        c)Yes, location:
+
+    6. Other findings:
+        nil
 
     Ensure the output is in **plain text**, with **no markdown, bullet points, or special formatting**.
   prompt: |
@@ -793,17 +909,189 @@ prompt_staging_esophagus:
     - Determine the T, N, and M classification.
     - Provide the clinical stage based on the AJCC 9th edition.
     - Explain your reasoning step-by-step, referencing specific imaging findings and advanced staging tricks where applicable.
-    - If further tests are needed for clarification, please specify.
+    - Fill out the provided "Imaging Report Form for Esophageal Cancer" using the following conventions:
+        - Replace `[c)` with ⬛ for positive findings, and 🔲 for negative or uncertain findings in checkbox items. If a finding is not assessable, leave the item as is.
+        - Replace `[r)` with ⬛ to mark one option only in radio button items. Leave the item as is if not assessable.
+        - Replace `[//wXXX]` with the extracted text, remove the bracket.
+        - Remove all brackets.
 
     **Output Format:**
     1. **TNM Classification**: (e.g., T3, N2, M1)
     2. **Clinical Stage Group**: (e.g., Stage IVB)
     3. **Step-by-Step Reasoning**: (Explain the reasoning for T, N, and M based on report findings, using relevant staging tricks.)
-    4. **Recommendations**: (Suggest additional diagnostic tests if necessary.)
+    4. **Imaging Report Form for Esophageal Cancer**: (Fill out the form following the instructions above.)
 
     Please provide the output strictly in **plain text** without any markdown, bullet points, or special formatting.
 
     **### Imaging Report:**
+  prompt_end: ""
+  response_type: "popup"
+  replace_selected: true
+  response_start: ""
+  response_end: ""
+  temperature: 0
+
+prompt_staging_colon:
+  menu_text: "Staging colorectal cancer"
+  prompt_system: |
+    # Colon Cancer Staging System for CT/MRI Interpretation (AJCC 8th Edition)
+
+    ## Objective:
+    Accurate TNM staging of colon cancer using CT and MRI imaging. Provide a clinical stage group and fill out the provided form based on the TNM stage.
+
+    ## 1. TNM Staging Criteria and Imaging Features:
+
+    ### **T (Primary Tumor)**
+    *   **T1:** Tumor confined to submucosa.
+        *   CT: Thickening of inner bowel layers (difficult to differentiate from T2).
+        *   MRI: Confined within submucosa on T2-weighted imaging.
+    *   **T2:** Tumor invades muscularis propria.
+        *   CT: Homogeneous mural thickening without fat invasion.
+        *   MRI: Clear muscle involvement, no fat invasion on high-resolution T2.
+    *   **T3:** Tumor extends into pericolonic fat.
+        *   CT: Irregular outer border, fine fat stranding (T3a-b) or nodular deposits (T3c-d).
+        *   MRI: Disrupts bowel layers; perirectal fat invasion visible on DWI.
+    *   **T4a:** Tumor perforates the visceral peritoneum.
+        *   CT: Exophytic growth beyond bowel wall.
+        *   MRI: Bright contrast enhancement breaking serosa.
+    *   **T4b:** Tumor invades adjacent organs.
+        *   CT: Loss of fat planes between tumor and adjacent organs.
+        *   MRI: Direct invasion with altered signal intensity in adjacent organ.
+
+    ### **N (Regional Lymph Nodes)**
+    *   **N0:** No lymph node involvement.
+    *   **N1:** 1-3 regional lymph nodes involved.
+    *   **N2:** ≥4 regional lymph nodes involved.
+    *   **Suspicious Lymph Node Features:**
+        *   Size >10mm in short axis
+        *   Round shape (vs. oval)
+        *   Loss of fatty hilum, heterogeneous enhancement
+        *   Restricted diffusion on DWI MRI
+
+    ### **M (Distant Metastasis)**
+    *   **M0:** No distant metastasis.
+    *   **M1a:** Metastasis to a single distant organ (liver, lung).
+    *   **M1b:** Multiple distant metastases.
+    *   **M1c:** Peritoneal carcinomatosis.
+    *   **Liver Metastases:**
+        *   CT: Hypodense in portal venous phase, peripheral enhancement.
+        *   MRI: T1 hypointense, T2 hyperintense, restricted diffusion on DWI.
+    *   **Lung Metastases:**
+        *   CT: Peripheral, round nodules.
+    *   **Peritoneal Carcinomatosis:**
+        *   CT: Omental caking, ascites, nodular peritoneal thickening.
+        *   MRI: DWI shows small peritoneal deposits.
+
+    ## 2. Advanced Considerations (Use *only* if data is clear):
+    *   Circumferential Tumor Spread (Rectal Cancer): Tumor <1mm from mesorectal fascia (MRF) = Poor prognosis.
+    *   Venous Invasion: Tumor thrombus in mesenteric or portal vein = Poor prognosis.
+    *   PET-CT: Useful for detecting occult metastases, *not* primary staging.
+
+    ## 3. Interpretation Tricks:
+    *   MRI preferred for rectal tumors – Better T & N staging.
+    *   CT best for liver & lung metastases – Consider MRI for uncertain liver lesions.
+    *   PET-CT for metastases – Not for primary tumor staging.
+    *   Loss of fat planes in T4b – Confirms organ invasion.
+    *   DWI MRI detects small peritoneal and nodal metastases.
+
+    ## Output Format:
+    1.  TNM Classification: (e.g., T3, N2a, M1c)
+    2.  Clinical Stage Group: (e.g., Stage IIIB)
+    3.  Reasoning:
+        *   T Stage:  "Based on [CT/MRI] features, the tumor [invades submucosa (T1) / muscularis propria (T2) / extends into pericolonic fat (T3) / perforates the visceral peritoneum (T4a) / invades adjacent organs (T4b)]."  Specify key findings (e.g., "perirectal fat invasion on DWI").
+        *   N Stage:  "Based on [CT/MRI] features, there are [number] suspicious lymph nodes, [>10mm / <10mm] in short axis, with [round shape / loss of fatty hilum / heterogeneous enhancement / restricted diffusion]." N[0/1/2]
+        *   M Stage:  "Based on [CT/MRI] features, there is [no distant metastasis (M0) / single-organ metastasis to [organ] (M1a) / multiple distant metastases (M1b) / peritoneal carcinomatosis (M1c)]." Specify key findings (e.g., "omental caking on CT").
+    4.  Imaging Report Form for Colorectal Cancer: Fill out the form below *exactly* as shown in the example, using the following guidelines:
+        *   **Checkboxes:** Mark the appropriate checkboxes with "■" for positive findings and "□" for negative or uncertain findings.
+        *   **Radio Buttons:** Select *only one* option for each radio button group by marking it with "■". Leave other options in the group unmarked ("□").
+        *   **Text Fields:** Extract relevant information from the imaging report and fill in the corresponding text fields.
+
+    **Example Output Format for the Imaging Report Form:**
+
+    ```
+    Imaging Report Form for Colorectal Cancer
+    1. Imaging Date
+        2025/01/15
+    Imaging Modality
+        Imaging by ■CT scan □MRI
+    Imaging Protocol
+        ■CT of the abdomen and pelvis with contrast enhancement
+    2. Tumor Location
+        □Cecum ■Ascending □Hepatic flexure □Transverse
+        □Splenic flexure □Descending □Sigmoid □Rectum
+        □Other:
+    Tumor Size
+        ■Measurable: 5.2 cm (largest diameter)
+        □Non-measurable
+    3. Tumor Invasion
+        □Not assessable
+        □No or Equivocal
+        ■Yes:
+            ■Colonic or rectal wall
+            ■Invades non-peritonealized pericolonic or perirectal tissues
+            □Invades visceral peritoneum or adjacent organs:
+    4. Regional Nodal Metastasis
+        ■No or Equivocal
+        □Yes, number of suspicious lymph node , location:
+            □Pericolic/perirectal □Ileocolic □Right colic □Middle Colic □Left Colic
+            □Superior rectal □Superior mesenteric artery □Inferior mesenteric artery
+            Other:
+    5. Distant metastasis (In this study)
+        ■No or Equivocal
+        □Yes, location:
+    6. Other findings: Mild thickening of the cecal wall.
+    ```
+
+    Imaging Report Form for Colorectal Cancer
+    1. Imaging Date
+        [2025//w100]/[//w50]/[//w50]
+    Imaging Modality
+        Imaging by [c)CT scan||MRI]
+    Imaging Protocol
+        [c)CT of the abdomen and pelvis without contrast enhancement]
+        [c)CT of the abdomen and pelvis with contrast enhancement]
+    2. Tumor Location
+        [c)Cecum|Ascending|Hepatic flexure|Transverse]
+        [c)Splenic flexure|Descending|Sigmoid|Rectum]
+        [c)Other: ][//w200]
+    Tumor Size
+        [c)Measurable: ||][//w50] cm (largest diameter)
+        [c)Non-measurable]
+    3. Tumor Invasion
+        [c)Not assessable]
+        [c)No or Equivocal]
+        [c)Yes: ]
+            [c)Colonic or rectal wall]
+            [c)Invades non-peritonealized pericolonic or perirectal tissues]
+            [c)Invades visceral peritoneum or adjacent organs: ][//w200]
+    4. Regional Nodal Metastasis
+        [c)No or Equivocal]
+        [c)Yes, number of suspicious lymph node][//w50], location:
+            [c)Pericolic/perirectal|Ileocolic|Right colic|Middle Colic|Left Colic]
+            [c)Superior rectal|Superior mesenteric artery|Inferior mesenteric artery]
+            [Other: ][//w200]
+    5. Distant metastasis (In this study)
+        [c)No or Equivocal]
+        [c)Yes, location: ][//w200]
+    6. Other findings: [//w500]
+  
+  prompt: |
+    Please analyze the following imaging report and determine the colon cancer TNM stage according to the AJCC 8th edition.
+
+    **Instructions:**
+    - Determine the T, N, and M classification.
+    - Provide the clinical stage based on the AJCC 8th edition.
+    - Explain your reasoning step-by-step, referencing specific imaging findings.
+    - Fill out the "Imaging Report Form for Colorectal Cancer" *exactly* as shown in the example provided in the system prompt. Pay attention to the guidelines for checkboxes and radio buttons, and fill in the text fields with information from the report.
+
+    **Output Format:**
+    1. TNM Classification: (e.g., T3, N2, M1)
+    2. Clinical Stage Group: (e.g., Stage IIIB)
+    3. Step-by-Step Reasoning: (Explain the reasoning for T, N, and M based on report findings.)
+    4. Imaging Report Form for Colorectal Cancer: (Fill out the form *exactly* as shown in the example, following the guidelines.)
+
+    **### Imaging Report:**
+
   prompt_end: ""
   response_type: "popup"
   replace_selected: true
@@ -836,11 +1124,12 @@ prompt_clarify_text:
   temperature: 0
 
 prompt_summarize:
-  menu_text: "以繁體中文摘要"
+  menu_text: "以中文摘要"
   prompt_system: |
     You are an advanced language model specializing in concise and informative summarization. Your task is to summarize input text into a clear and coherent passage with a strict word limit. Ensure that the summary retains key details, eliminates redundancy, and maintains logical flow while adhering to the specified word count. **All output must be in Traditional Chinese.**
   prompt: |
     Summarize the following text in exactly 100 words, preserving its key information and logical coherence while removing unnecessary details. **The summary must be in Traditional Chinese:** 
+
   prompt_end: ""
   response_type: "popup"
   replace_selected: true
@@ -851,9 +1140,10 @@ prompt_summarize:
 prompt_explain:
   menu_text: "用中文解釋"
   prompt_system: |
-    You are a world-class educator skilled at transforming complex ideas into simple, accessible explanations in Traditional Chinese. Your goal is to make the given text crystal clear to a general audience with no prior knowledge of the subject. Use vivid language, relatable analogies, and concrete examples to illuminate the key concepts. Ensure your explanation is accurate, engaging, and culturally appropriate for Traditional Chinese readers. **All output must be in Traditional Chinese.**
+    You are a world-class educator skilled at transforming complex ideas into concise and easily understandable explanations in Traditional Chinese. Your goal is to explain the given text in a clear and refined manner to adults with a university education. Use precise language, avoiding oversimplification or lengthy explanations. Ensure your explanation is accurate, engaging, and culturally appropriate for Traditional Chinese readers. **All output must be in Traditional Chinese.**
   prompt: |
-    Explain the following in Traditional Chinese in a way that anyone can easily understand, even if they've never heard of it before. Use examples and analogies to make it clear and memorable. **The explanation must be in Traditional Chinese:** 
+    Please explain the following in Traditional Chinese, targeting adults with a university education. Ensure the explanation is concise and avoids unnecessary details. **The explanation must be in Traditional Chinese:**
+
   prompt_end: ""
   response_type: "popup"
   replace_selected: true
