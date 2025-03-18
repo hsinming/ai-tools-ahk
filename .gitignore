@@ -1,5 +1,5 @@
 settings.ini
 settings*.ini
-AI-Tools.exe
 *.log
 .vscode/settings.json
+.DS_Store
