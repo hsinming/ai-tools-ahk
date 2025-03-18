@@ -8,19 +8,21 @@
 #Include "_JXON.ahk"
 #include "_Cursor.ahk"
 #Include "_MD_Gen.ahk"
+#Include "_YAML.ahk"
 Persistent
 SendMode "Input"
 
 ;# globals
 _settingFile := ".\settings.ini"
+_promptFile := ".\prompts.yaml"
 _running := false
 _settingsCache := Map()
 _lastModified := FileGetTime(_settingFile)
 _displayResponse := false
 _activeWin := ""
 _oldClipboard := ""
-_debug := ToBool(GetSetting("settings", "debug", "false"))
-_reload_on_change := ToBool(GetSetting("settings", "reload_on_change", "true"))
+_debug := ToBool(GetSettingFromINI("settings", "debug", "false"))
+_reload_on_change := ToBool(GetSettingFromINI("settings", "reload_on_change", "true"))
 _styleCSS := FileRead(".\style.css")
 
 
@@ -44,15 +46,15 @@ InitPopupMenu()
 InitTrayMenu()
 
 ;# hotkeys
-HotKey GetSetting("settings", "hotkey_1"), (*) => (
+HotKey GetSettingFromINI("settings", "hotkey_1"), (*) => (
     SelectText()
-    PromptHandler(GetSetting("settings", "hotkey_1_prompt")))
+    PromptHandler(GetSettingFromINI("settings", "hotkey_1_prompt")))
 
-HotKey GetSetting("settings", "hotkey_2"), (*) => (
+HotKey GetSettingFromINI("settings", "hotkey_2"), (*) => (
     SelectText()
     ShowPopupMenu())
 
-HotKey GetSetting("settings", "menu_hotkey"), (*) => (
+HotKey GetSettingFromINI("settings", "menu_hotkey"), (*) => (
     ShowPopupMenu())
 
 ;###
@@ -76,7 +78,7 @@ PromptHandler(promptName) {
         _startTime := A_TickCount
 
         ShowWaitTooltip()
-        SetSystemCursor(GetSetting("settings", "cursor_wait_file", "wait"))
+        SetSystemCursor(GetSettingFromINI("settings", "cursor_wait_file", "wait"))
         
         try {
             input := GetSelectedText()
@@ -87,7 +89,7 @@ PromptHandler(promptName) {
             return
         }        
         
-        mode := GetSetting(promptName, "mode", GetSetting("settings", "default_mode"))
+        mode := GetSettingFromYAML(promptName, "mode", GetSettingFromINI("settings", "default_mode"))
         CallAPI(mode, promptName, input)
 
     } catch as err {
@@ -224,11 +226,12 @@ GetSelectedText() {
     return text
 }
 
-GetSetting(section, key, defaultValue := "") {
+GetSettingFromINI(section, key, defaultValue := "") {
     global _settingsCache, _settingFile
     
-    if (_settingsCache.Has(section . key . defaultValue)) {
-        return _settingsCache.Get(section . key . defaultValue)
+    cacheKey := section . key . defaultValue
+    if (_settingsCache.Has(cacheKey)) {
+        return _settingsCache[cacheKey]
     } else {
         value := IniRead(_settingFile, section, key, defaultValue)
         if IsNumber(value) {
@@ -236,39 +239,64 @@ GetSetting(section, key, defaultValue := "") {
         } else {
             value := UnescapeSetting(value)
         }
-        _settingsCache.Set(section . key . defaultValue, value)
+        _settingsCache[cacheKey] := value
         return value
     }
 }
 
+GetSettingFromYAML(section, key := "", defaultValue := "") {
+    global _settingsCache, _promptFile
+
+    cacheKey := section . key
+    if (_settingsCache.Has(cacheKey)) {
+        return _settingsCache[cacheKey]
+    }
+
+    try {
+        YAMLobj := YAML.parse(FileRead(_promptFile))
+        if !YAMLobj.Has(section) {
+            value := defaultValue
+        } else if (key == "") {
+            value := YAMLobj[section]
+        } else {
+            value := YAMLobj[section].Has(key) ? YAMLobj[section][key] : defaultValue
+        }
+    } catch {
+        value := defaultValue
+    }
+
+    _settingsCache[cacheKey] := value
+    return value
+}
+
 GetBody(mode, promptName, input) {
     ;; load mode defaults
-    model := GetSetting(mode, "model")
-    max_tokens := GetSetting(mode, "max_tokens", 4096)
-    temperature := GetSetting(mode, "temperature", 1.0)
-    frequency_penalty := GetSetting(mode, "frequency_penalty", 0.0)
-    presence_penalty := GetSetting(mode, "presence_penalty", 0.0)
-    top_p := GetSetting(mode, "top_p", 1)    
-    stop := GetSetting(mode, "stop", "")
+    model := GetSettingFromINI(mode, "model")
+    max_tokens := GetSettingFromINI(mode, "max_tokens", 4096)
+    temperature := GetSettingFromINI(mode, "temperature", 1.0)
+    frequency_penalty := GetSettingFromINI(mode, "frequency_penalty", 0.0)
+    presence_penalty := GetSettingFromINI(mode, "presence_penalty", 0.0)
+    top_p := GetSettingFromINI(mode, "top_p", 1)    
+    stop := GetSettingFromINI(mode, "stop", "")
 
     ;; load prompt overrides
-    model := GetSetting(promptName, "model", model)
-    max_tokens := GetSetting(promptName, "max_tokens", max_tokens)
-    temperature := GetSetting(promptName, "temperature", temperature)
-    frequency_penalty := GetSetting(promptName, "frequency_penalty", frequency_penalty)
-    presence_penalty := GetSetting(promptName, "presence_penalty", presence_penalty)
-    top_p := GetSetting(promptName, "top_p", top_p)    
-    stop := GetSetting(promptName, "stop", stop)
+    model := GetSettingFromYAML(promptName, "model", model)
+    max_tokens := GetSettingFromYAML(promptName, "max_tokens", max_tokens)
+    temperature := GetSettingFromYAML(promptName, "temperature", temperature)
+    frequency_penalty := GetSettingFromYAML(promptName, "frequency_penalty", frequency_penalty)
+    presence_penalty := GetSettingFromYAML(promptName, "presence_penalty", presence_penalty)
+    top_p := GetSettingFromYAML(promptName, "top_p", top_p)    
+    stop := GetSettingFromYAML(promptName, "stop", stop)
 
     ;; assemble messages
     messages := []
-    prompt_system := GetSetting(promptName, "prompt_system", "")
+    prompt_system := GetSettingFromYAML(promptName, "prompt_system", "")
     if (prompt_system != "") {
         messages.Push(Map("role", "system", "content", prompt_system))
     }
     
-    prompt := GetSetting(promptName, "prompt")
-    promptEnd := GetSetting(promptName, "prompt_end", "")
+    prompt := GetSettingFromYAML(promptName, "prompt")
+    promptEnd := GetSettingFromYAML(promptName, "prompt_end", "")
     content := prompt . input . promptEnd
     messages.Push(Map("role", "user", "content", content))
     
@@ -291,8 +319,8 @@ CallAPI(mode, promptName, input) {
     bodyJson := Jxon_dump(body, 4)
     LogDebug("bodyJson ->`n" bodyJson)
     
-    endpoint := GetSetting(mode, "endpoint")
-    apiKey := GetSetting(mode, "api_key", GetSetting("settings", "default_api_key"))
+    endpoint := GetSettingFromINI(mode, "endpoint")
+    apiKey := GetSettingFromINI(mode, "api_key", GetSettingFromINI("settings", "default_api_key"))
 
     req := ComObject("Msxml2.ServerXMLHTTP")
     req.open("POST", endpoint, true)
@@ -301,7 +329,7 @@ CallAPI(mode, promptName, input) {
     req.SetRequestHeader("api-key", apiKey) ; Azure
     req.SetRequestHeader('Content-Length', StrLen(bodyJson))
     req.SetRequestHeader("If-Modified-Since", "Sat, 1 Jan 2000 00:00:00 GMT")    
-    req.SetTimeouts(0, 0, 0, GetSetting("settings", "timeout", 120) * 1000) ; read, connect, send, receive
+    req.SetTimeouts(0, 0, 0, GetSettingFromINI("settings", "timeout", 120) * 1000) ; read, connect, send, receive
 
     try {
         req.send(bodyJson)
@@ -345,12 +373,12 @@ HandleResponse(response, mode, promptName, input) {
         }
 
         ;; Clean up response text
-        text := StrReplace(text, '`r', "") ; remove carriage returns
-        replaceSelected := ToBool(GetSetting(promptName, "replace_selected", "true"))
+        text := StrReplace(text, '`r', "") ; remove carriage returns        
+        replaceSelected := ToBool(GetSettingFromYAML(promptName, "replace_selected", "true"))
         
         if not replaceSelected {  ; Append Mode
-            responseStart := GetSetting(promptName, "response_start", "")
-            responseEnd := GetSetting(promptName, "response_end", "")
+            responseStart := GetSettingFromYAML(promptName, "response_start", "")
+            responseEnd := GetSettingFromYAML(promptName, "response_end", "")
             text := input . responseStart . text . responseEnd
         } else {  ; Replace Mode
             ;# Remove leading newlines
@@ -364,7 +392,7 @@ HandleResponse(response, mode, promptName, input) {
             }
         }
 
-        response_type := GetSetting(promptName, "response_type", "popup")
+        response_type := GetSettingFromYAML(promptName, "response_type", "popup")
         if _displayResponse or StrLower(response_type) == "popup" {
             MyGui := Gui(, "Response")
             MyGui.SetFont("s13")
@@ -425,7 +453,7 @@ HandleResponse(response, mode, promptName, input) {
             A_Clipboard := Trim(text, "`n")  ; Remove leading/trailing newlines
             Send("^v")
             Sleep 500
-            RestoreClipboard()    
+            RestoreClipboard()
         }        
     } finally {
         RestoreCursor()
@@ -455,7 +483,7 @@ HandleResponse(response, mode, promptName, input) {
     }
     
     CopyText(edit) {
-        A_Clipboard := edit.Text
+        A_Clipboard := StrReplace(edit.Value, "`n", "`r`n")
         MouseGetPos(&mouseX, &mouseY)
         ToolTip("✔ Copied!", mouseX + 10, mouseY + 10)  ; Show a tooltip near the mouse cursor
         SetTimer () => ToolTip(), -1000  ; Set a timer to hide the tooltip after 1 second
@@ -464,22 +492,21 @@ HandleResponse(response, mode, promptName, input) {
 
 InitPopupMenu() {
     global _iMenu := Menu()  ; Create a new menu object.
-    global _displayResponse, _settingFile
+    global _displayResponse
     iMenuItemParms := Map()
 
     _iMenu.Add("&`` - Display response in new window", NewWindowCheckHandler)
     _iMenu.Add()  ; Add a separator line.
-
-    menu_items := IniRead(_settingFile, "popup_menu")
+    
+    menu_items := GetSettingFromYAML('popup_menu')    
 
     id := 1
-    Loop Parse menu_items, "`n" {
-        v_promptName := A_LoopField
+    for v_promptName in menu_items {    
         if (v_promptName != "" and SubStr(v_promptName, 1, 1) != "#") {
             if (v_promptName == "-") {
                 _iMenu.Add()  ; Add a separator line.
             } else {
-                menu_text := GetSetting(v_promptName, "menu_text", v_promptName)
+                menu_text := GetSettingFromYAML(v_promptName, "menu_text", v_promptName)
                 if (RegExMatch(menu_text, "^[^&]*&[^&]*$") == 0) {
                     if (id == 10)
                         keyboard_shortcut := "&0 - "
@@ -599,5 +626,8 @@ LogDebug(msg) {
 }
 
 ToBool(value) {
-    return StrLower(String(value)) == "true"
+    if IsNumber(value) && (value == 0 || value == 1) {
+        return value = 1  ; 0 → false, 1 → true
+    }    
+    return StrLower(String(value)) == "true" || value == "yes" || value == "on"
 }
