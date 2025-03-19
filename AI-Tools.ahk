@@ -237,7 +237,7 @@ GetSettingFromINI(section, key, defaultValue := "") {
         if IsNumber(value) {
             value := Number(value)
         } else {
-            value := UnescapeSetting(value)
+            value := UnescapeSetting(value)  ; Replaces escaped newline sequences ("\n") with actual newline characters ("`n")
         }
         _settingsCache[cacheKey] := value
         return value
@@ -371,10 +371,11 @@ HandleResponse(response, mode, promptName, input) {
             MsgBox "No text was generated. Consider modifying your input."
             return
         }
-
+        
         ;; Clean up response text
-        text := StrReplace(text, '`r', "") ; remove carriage returns        
-        replaceSelected := ToBool(GetSettingFromYAML(promptName, "replace_selected", "true"))
+        ; TODO: clean text first anyway, then replace "`n" with "`r`n" or just remark the next line ?
+        text := StrReplace(text, "`r", "") ; remove carriage returns        
+        replaceSelected := ToBool(GetSettingFromYAML(promptName, "replace_selected", "true"))        
         
         if not replaceSelected {  ; Append Mode
             responseStart := GetSettingFromYAML(promptName, "response_start", "")
@@ -621,7 +622,7 @@ LogDebug(msg) {
     if (_debug != false) {
         now := FormatTime(A_Now, "yyyy-MM-dd HH:mm:ss")
         logMsg := "[" . now . "] " . msg . "`n"
-        FileAppend(logMsg, "./debug.log")
+        FileAppend(logMsg, "./debug.log", "UTF-8-RAW")
     }
 }
 

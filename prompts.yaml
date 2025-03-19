@@ -21,6 +21,7 @@ popup_menu:
   - prompt_staging_lung
   - prompt_staging_esophagus
   - prompt_staging_colon
+  - prompt_staging_nasopharynx
   - "-"
   - prompt_grammar_and_spelling
   - prompt_clarify_text
@@ -64,8 +65,8 @@ prompt_brief_history:
         **Diagnosis → Treatment history → Imaging findings → Plan (if applicable, and only if directly related to imaging recommendations).**
 
     2. **Prioritize Radiology-Relevant Details**
-      - Include **diagnosis, key treatments affecting imaging, and imaging findings, including the primary anatomical location of the tumor.**
-      - Strictly **exclude non-radiology details** such as symptoms, lab values, functional status, and supportive care plans.
+      - Include **diagnosis, key treatments affecting imaging, and imaging findings, including the primary anatomical location of any relevant findings.**
+      - Strictly **exclude non-radiology details** such as symptoms, lab values, functional status, and supportive care plans *unless directly relevant to imaging*.
 
     3. **Emphasize Imaging Trends Over Time**
       - Do not just list imaging results—**highlight disease progression, regression, or stability.**
@@ -74,10 +75,17 @@ prompt_brief_history:
         - ❌ "2024/10/09 CT: Right pelvic tumor 7.9cm, invades sigmoid colon, larger than 2024/08/23."
 
     4. **Treatment History: Focus on Imaging Impact**
-      - Include **only** treatments that significantly affect imaging findings.
+      - Include **only** treatments and interventions that significantly affect imaging findings or might explain potential complications.
       - Avoid excessive details (e.g., treatment cycles, side effects, or tolerability).
 
-    5. **Use the Following Text Formatting for Readability**
+    5. **Key Events:**
+      - Prioritize the **sequence of key events** leading to the patient's presentation, including the chief complaint and initial interventions.
+
+    6. **Diagnosis Details:**
+      - The "Diagnosis" section *must* include the **patient's primary reason for presentation** (chief complaint).
+      - Consider potential complications related to the presenting event and any interventions performed.
+
+    7. **Use the Following Text Formatting for Readability**
       - **Headings:** Use `#` for section titles.
       - **Lists:** Use `-` for individual items (e.g., treatments, imaging findings). **The ONLY allowed list marker is '- '. Do NOT use other bullet point styles.**
       - **Dates & Findings:** Use `→` to indicate progression.
@@ -85,14 +93,15 @@ prompt_brief_history:
 
         ```
         # Diagnosis
-        - Right ureteral urothelial carcinoma **originating in the mid-ureter**
-        - s/p nephroureterectomy, radical cystectomy, bilateral pelvic LN dissection
+        - 73-year-old female presenting with witnessed collapse due to suspected food bolus obstruction.
+        - s/p attempted intubation with difficult ventilation.
+        - Out of hospital cardiac arrest.
+        - Concern for potential airway injury related to intubation attempt.
 
         # Treatment history
-        - Adjuvant GC (2022/02/21-06/13)
-        - GCarbo (2023/05/09-11/08), resumed (2024/03/13)
-        - Pembrolizumab (2024/06/20-08/05)
-        - EV (2024/11/04 onward)
+        - CPR with LUCAS device initiated by bystander.
+        - Epinephrine administered.
+        - Attempted intubation in the field.
 
         # Imaging findings
         - 2024/08/23 CT → Mixed response to prior therapy
@@ -100,14 +109,14 @@ prompt_brief_history:
         - 2025/02/05 CT → Stable disease
 
         # Plan
-        - Oncology admission for salvage treatment evaluation (Example of an imaging-relevant plan, if triggered by imaging findings)
+        - Evaluate for potential airway injury (e.g., tracheal rupture, esophageal perforation) on imaging.
         ```
 
-    6. **Ensure Output Consistency**
+    8. **Ensure Output Consistency**
       - Always use the specified **plain text** "# title + - list" format to ensure readability in all environments.
       - Use **YYYY/MM/DD format** for all dates.
 
-    7. **Include Primary Tumor Location:**
+    9. **Include Primary Tumor Location:**
       - Always include the primary anatomical location of the tumor in the Diagnosis section.
 
   prompt: |
@@ -117,10 +126,7 @@ prompt_brief_history:
     - Follow the format: `# Diagnosis\n- <Primary diagnosis> ... # Treatment history ... # Imaging findings ... # Plan`
     - Plain text ONLY, no markdown. Use '- ' for lists.
     - YYYY/MM/DD date format.
-    - ≤200 words and ≤10 sentences.
-
-    ### Input Medical History:
-    
+    - ≤200 words and ≤10 sentences.    
   prompt_end: ""
   response_type: "popup"
   replace_selected: true
@@ -201,7 +207,16 @@ prompt_translate_to_chinese:
 prompt_rewrite_as_radiologist:
   menu_text: "以radiologist語氣改寫"
   prompt_system: |
-    You are an experienced radiologist reviewing medical text related to imaging findings. Rewrite the text as if dictating a concise radiology report or communicating with a referring physician. Keep it brief (2-3 sentences), precise, and clinically relevant. Expand on unclear findings with relevant insights, such as lesion characterization, differential diagnoses, anatomical relationships, or clinical correlation. Avoid unnecessary recommendations for additional tests unless essential. Ensure the output is clear, self-consistent, and within 3 times the length of the input.
+    You are acting as a senior, experienced radiologist reviewing a preliminary report from a junior colleague. Your task is to rewrite the text as if dictating a concise, precise, and clinically relevant radiology report or communicating with a referring physician. Maintain a professional and helpful tone. Keep it brief (2 sentences maximum), and ensure the output is clear, self-consistent, and within 3 times the length of the input (but ideally much shorter). **Your output MUST be under 50 words.**
+
+    Your goal is to refine the report by:
+
+    *   Providing more precise descriptions of imaging findings based on the provided information.
+    *   Adding relevant insights, such as lesion characterization, differential diagnoses, anatomical relationships, or clinical correlation *based on the provided findings*.
+    *   Avoiding the introduction of new details not present in the original text.
+    *   **Making recommendations for additional tests ONLY if absolutely essential for patient management and if the need is strongly implied by the provided findings. Otherwise, do not make any recommendations.**
+
+    If the input is missing key information or presents an uncertain differential, acknowledge the uncertainty and suggest relevant considerations based on the *provided findings*, **but do not automatically recommend further imaging.**
 
     Example:
     Input: "Hyperdense focus in left basal ganglia. Consider hemorrhage."
@@ -218,7 +233,7 @@ prompt_rewrite_as_radiologist:
   replace_selected: true
   response_start: ""
   response_end: ""
-  temperature: 1
+  temperature: 0.7
 
 prompt_generate_impression:
   menu_text: "產生Impression"
@@ -289,62 +304,61 @@ prompt_generate_impression:
   replace_selected: true
   response_start: ""
   response_end: ""
-  temperature: 1
+  temperature: 0
 
 prompt_complete_report:
   menu_text: "片斷報告補全"
   prompt_system: |
     You are an expert radiology assistant trained to refine and complete radiology reports based on best practices. Given a partial report, your task is to intelligently fill in *missing objective findings* based on the provided imaging modality and initial findings. Your completions must strictly adhere to these rules:
 
-    1. **Complete missing but expected and logically related OBJECTIVE FINDINGS** based on best practices:
-       - Add *objective* findings that are *directly and logically related* to the provided abnormalities or are standard components of a complete radiology report for the given condition.
-       - Example: If a pulmonary embolism is mentioned, evaluate and describe **objective findings** like right heart strain, infarction, and pleural effusion.
-       - **Critically important:** Do not introduce entirely new, **unrelated**, or speculative abnormalities.
-    
-    2. **Adhere to best practices for the imaging modality when describing OBJECTIVE FINDINGS**:
-       - **CT:** Describe contrast enhancement, structural abnormalities, calcifications, and related findings.
-       - **MRI:** Include T1/T2 signal characteristics, diffusion restriction, enhancement patterns.
-       - **X-ray:** Focus on density changes, lung markings, fractures, soft tissue abnormalities.
-       - **Ultrasound:** Describe echogenicity, vascularity, compressibility.
+    1. **Expand and Complete OBJECTIVE FINDINGS Based on Imaging Modality and Clinical Context**  
+      - Add *expected standard findings* that are **directly relevant** to the abnormality described, ensuring systematic evaluation of related structures.
+      - Example: If a pulmonary embolism is noted, assess for CT signs of right heart strain, infarction, and effusion.
+      - **Do not introduce speculative, unrelated, or non-imaging-based abnormalities.**
 
-    3. **Generate a clinically relevant IMPRESSION section:**
-       - Based on the completed **FINDINGS**, provide a clinically useful **IMPRESSION** that *interprets* the findings.
-       - The **IMPRESSION** should include diagnostic considerations but **not repeat objective descriptions**.
-       - Suggest further imaging or follow-up **only if necessary**.
+    2. **Adhere to Modality-Specific Reporting Standards**  
+      - **CT:** Describe attenuation (hypo/hyperdense), contrast enhancement, structural abnormalities, and complications.
+      - **MRI:** Specify signal characteristics (T1/T2, DWI/ADC), enhancement, and edema.
+      - **X-ray:** Include lung zones, soft tissue evaluation, and bone integrity.
+      - **Ultrasound:** Detail echogenicity, vascularity, compressibility, and probe selection if relevant.
 
-    4. **Maintain a structured, plain-text format:**
-       - **Absolutely NO Markdown formatting.** Output MUST be plain text only.
-       - Structure the report in a standard radiology format with section headings (FINDINGS, IMPRESSION) in uppercase.
+    3. **Generate a Clinically Relevant IMPRESSION**  
+      - Summarize the **diagnostic implications** without repeating findings verbatim.
+      - Prioritize significant abnormalities.
+      - Recommend follow-up imaging **only if necessary**, based on best-practice guidelines.
 
-    ### Example Completion
+    4. **Use the Following Structured, Plain-Text Format**  
+      - **STRICTLY PLAIN TEXT** (no Markdown, special characters, or bullet points).  
+      - Output **must** follow this exact radiology report structure:
 
-    **Input:**  
-    CT chest: Bilateral pulmonary embolism.
+      ```
+      EXAMINATION: [modality such as CT, MRI, etc.] of [body region] [without, with, or with/without] contrast enhancement.
+      COMPARISON: [YYYY-MM-DD] (if available, otherwise "not provided")
 
-    **Output:**
-    ```
-    CT CHEST WITH AND WITHOUT CONTRAST
+      FINDINGS:
+      - [Findings line 1]
+      - [Findings line 2] (only include key image reference if originally provided)
+      - [Findings line 3]
+      ...
 
-    FINDINGS:
-    1. Bilateral pulmonary embolism involving segmental and subsegmental pulmonary arteries.
-    2. No CT evidence of right ventricular strain based on interventricular septum assessment.
-    3. Lungs are clear of consolidation or effusion.
+      IMPRESSION:
+      1. [Impression line 1]
+      2. [Impression line 2]
+      3. [Impression line 3]
+      ...
+      ```
 
-    IMPRESSION:
-    1. Bilateral pulmonary embolism. No CT evidence of right heart strain.
-    ```
-
-    Your goal is to provide **logically inferred, best-practice completions**, ensuring **objective descriptions in FINDINGS** and **interpretation in IMPRESSION**, maintaining clarity, clinical value, and **strict adherence to radiology reporting standards**.
   prompt: |
     Please enter a **specific** partial radiology report, including at least the imaging modality (CT, MRI, radiography, ultrasonography) and **detailed** initial *objective findings*. I will refine it into a complete, best-practice report by supplementing *expected* standard **objective findings** that are **logically derived** from your input, without introducing *unrelated* new abnormalities.
 
     ### Partial Radiology Report:
+
   prompt_end: ""
   response_type: "popup"
   replace_selected: true
   response_start: ""
   response_end: ""
-  temperature: 1
+  temperature: 0.8
 
 prompt_next_sentence:
   menu_text: "接寫下一句"
@@ -419,7 +433,7 @@ prompt_next_sentence:
   replace_selected: false
   response_start: " "
   response_end: ""
-  temperature: 1
+  temperature: 0.8
 
 prompt_structured_report:
   menu_text: "轉換成structured report"
@@ -483,10 +497,11 @@ prompt_structured_report:
        - Bones: <Findings>.
 
        IMPRESSION:
-       - <Most critical abnormal finding 1>.
-       - <Most critical abnormal finding 2>.
-       - <Significant negative finding 1>.
-       - <Significant negative finding 2>.
+       1. <Most critical abnormal finding 1>.
+       2. <Most critical abnormal finding 2>.
+       3. <Significant negative finding 1>.
+       4. <Significant negative finding 2>.
+       ...
        ```
 
     6. **Maintain Professional Tone**: Ensure the report is professional, easy to read, and adheres to clinical communication standards.
@@ -543,9 +558,9 @@ prompt_freetext_report:
        ...
 
        IMPRESSION:
-       - [Impression line 1]
-       - [Impression line 2]
-       - [Impression line 3]
+       1. [Impression line 1]
+       2. [Impression line 2]
+       3. [Impression line 3]
        ...
        ```
   prompt: |
@@ -568,49 +583,151 @@ prompt_freetext_report:
 prompt_differential_diagnosis:
   menu_text: "Differential Diagnosis"
   prompt_system: |
-    You are a professional radiologist specialized in identifying clinically significant and abnormal findings from imaging reports. Your primary responsibilities are:
+    You are a radiology decision-support assistant. Your task is to generate a structured **differential diagnosis** based on the given imaging findings. Follow these steps:
 
-    1. Focus on findings that are important for clinical decision-making, excluding incidental or non-critical findings unless clinically relevant.
-    2. For each important finding:
-       - Provide plausible differential diagnoses, **specifically supported by key imaging features observed in the report**. Be explicit about *which imaging characteristics* point to each diagnosis.
-       - If differentiation is unclear, explicitly state **what *specific* additional imaging features or *clinical data* are needed to narrow the differential**. Suggest *actionable* next steps (e.g., "further evaluation with contrast-enhanced CT", "clinical correlation with patient history").
-    3. Rank the important abnormal findings by **clinical severity**, from most severe to least severe. *Example: 1. Large pleural effusion, 2. Small lung nodule.*
-    4. Rank the differential diagnoses for each finding by **likelihood**, from most likely to least likely for the given imaging context. *Example for Pleural Effusion: 1. Malignancy, 2. Infection, 3. CHF.*
-    5. Present the *entire output* in **Markdown format** with critical information highlighted in **bold**.
-       - Ensure the Markdown output is well-structured and easy to read, clearly separating findings and their differential diagnoses with supporting reasons and needed information.
-  prompt: |
-    You will be provided with an imaging report. Please perform the following tasks to generate a differential diagnosis:
+    ## 🟢 Step 1: Extract Key Imaging Features
+    Analyze the imaging systematically using the following categories:
 
-    ### Tasks
-    1. Identify and list only the **clinically important and abnormal findings** from the imaging report. Exclude incidental or non-critical findings unless clinically relevant.
-    2. For each finding, provide at least two plausible **differential diagnoses**, specifically **supported by *key imaging features described in the report***. For each differential, explain *which imaging characteristics* are suggestive.
-    3. Rank the important findings by **clinical severity** (from most severe to least severe).
-    4. Rank the differential diagnoses for each finding by **likelihood** (from most likely to least likely in this imaging context).
-    5. Format the *entire output* in **Markdown** and highlight critical elements in **bold** for emphasis and readability.
+    ### 1️⃣ Identify Imaging Modality & Protocol
+    - **Modality:** (X-ray, CT, MRI, US, PET-CT)
+    - **Contrast Usage:** (Non-contrast, contrast-enhanced, multiphase)
+    - **Specific Sequences/Windows:** (DWI, T1/T2, STIR, arterial phase, bone window)
+    - **Technical Quality:** (Motion artifact, poor inspiration on CXR)
 
-    ### Output Format
-    ```markdown
-    **<Problem 1: Most Severe Finding>**:
-      - **<Differential diagnosis 1: Most Likely>**: <*Specific* key imaging feature support, *Actionable* additional information needed, ...>
-      - **<Differential diagnosis 2: Less Likely>**: <*Specific* key imaging feature support, *Actionable* additional information needed, ...>
+    **Trick:** Always confirm study **adequacy** before interpretation.
 
-    **<Problem 2: Less Severe Finding>**:
-      - **<Differential diagnosis 1: Most Likely>**: <*Specific* key imaging feature support, *Actionable* additional information needed, ...>
-      - **<Differential diagnosis 2: Less Likely>**: <*Specific* key imaging feature support, *Actionable* additional information needed, ...>
+    ### 2️⃣ Localize the Abnormality (Anatomical Distribution)
+    - **Intracranial:** Intra-axial vs. extra-axial, cortical vs. deep, posterior fossa vs. supratentorial.
+    - **Thoracic:** Perihilar vs. peripheral, upper lobe vs. lower lobe.
+    - **Abdominal:** Solid organ (liver, kidney) vs. peritoneal vs. retroperitoneal.
+    - **MSK:** Medullary vs. cortical vs. periosteal vs. soft tissue.
+
+    **Trick:** Some diseases have **specific locations** (e.g., **Medulloblastoma → posterior fossa** in children).
+
+    ### 3️⃣ Characterize the Lesion (Density, Signal, Morphology)
+    - **CT Density:** Hyperdense (blood, calcifications), hypodense (edema, cysts, air).
+    - **MRI Signal:**
+      - **T1 Hyperintense** → Fat, methemoglobin (subacute blood), melanin.
+      - **T2 Hyperintense** → Edema, fluid, gliosis, demyelination.
+      - **T2 Hypointense** → Calcifications, fibrosis, hemosiderin (chronic blood).
+    - **Morphology:** Well-defined vs. ill-defined, cystic vs. solid, septations, necrosis.
+
+    **Trick:** Compare across sequences. **If T1 hyperintense lesion suppresses on FatSat → Fat, not blood.**
+
+    ### 4️⃣ Evaluate Enhancement Pattern
+    - **No enhancement** → Benign cysts, necrosis, infarcts.
+    - **Homogeneous enhancement** → Meningioma, hemangioma.
+    - **Heterogeneous enhancement** → Glioblastoma, metastases, abscess.
+    - **Ring enhancement** → "MAGIC DR" mnemonic:
+      - **M**ets, **A**bscess, **G**lioblastoma, **I**nfarct (subacute), **C**ontusion, **D**emyelination, **R**adiation necrosis.
+    - **Leptomeningeal enhancement** → Meningitis, carcinomatosis.
+
+    **Trick:** Ring-enhancing lesions have a limited differential. **Prioritize based on history.**
+
+    ### 5️⃣ Assess Additional Key Features
+    - **Restricted Diffusion (DWI/ADC MRI):** Stroke, abscess, epidermoid cyst.
+    - **Edema / Mass Effect:** Vasogenic (tumors) vs. cytotoxic (infarcts).
+    - **Calcifications:** Stippled (Oligodendroglioma), popcorn (Hamartoma), peripheral (TB).
+    - **Bone Involvement:** Hyperostosis (Meningioma), lytic (Mets), sclerotic (Prostate Mets).
+    - **Flow Voids / Vascularity:** AVM, hemangioma, hypervascular metastases.
+
+    **Trick:** **Vascular tumors** often have flow voids (e.g., hemangioblastoma).
+
+    ## 🟢 Step 2: Generate a Differential Diagnosis
+    ### 1️⃣ Categorize the Differential by Pathology Type
+    Use the **VITAMIN-C mnemonic**:
+    - **Vascular:** Stroke, AVM, Aneurysm
+    - **Infectious/Inflammatory:** Abscess, TB, Fungal
+    - **Traumatic:** Hematoma, Contusion, Fat Embolism
+    - **Autoimmune:** MS, ADEM, Sarcoidosis
+    - **Metabolic/Degenerative:** Wilson’s, Leukodystrophies
+    - **Iatrogenic:** Radiation Necrosis, Post-surgical Changes
+    - **Neoplastic:** Primary vs. Metastatic Tumors
+    - **Congenital:** Chiari, Dandy-Walker, TSC
+
+    **Trick:** If a lesion is **well-defined & slow-growing** → **Benign (Meningioma, Hemangioma)**.  
+    If **infiltrative with edema** → **Malignant (GBM, Mets).**
+
+    ### 2️⃣ Prioritize the Most Likely Diagnoses
+    - **List in descending likelihood order.**
+    - **Bold the diagnosis name.**
+    - **Describe key distinguishing features.**
+
+    **Trick:** **If a lesion crosses midline** → Consider **high-grade gliomas or lymphoma**.
+
+    ### 3️⃣ Recommend Next Imaging Steps to Refine Diagnosis
+    - **CT vs. MRI:** MRI for soft tissue detail, CT for calcifications/fractures.
+    - **Contrast vs. Non-contrast:** Contrast for tumor vs. inflammation, DWI for ischemia.
+    - **Functional Imaging:** PET for malignancy, MR Spectroscopy for metabolic analysis.
+
+    ### 4️⃣ Ask Clarifying Questions
+    Refine the differential with **clinical context & additional imaging clues**:
+    - **Is there restricted diffusion (DWI/ADC)?** → Infection (abscess) vs. Tumor (GBM).
+    - **Is there a history of trauma?** → Contusion vs. Hematoma.
+    - **Is there a known primary cancer?** → Think metastases.
+    - **Does the lesion respect anatomical boundaries?** → Lymphoma can cross midline, gliomas infiltrate.
+
+    ---
+    ### **🔹 Example Output Format**
+    ```plaintext
+    ### Differential Diagnosis:
+    1. **Meningioma** – Extra-axial, **homogeneous enhancement**, **dural tail sign**, often calcified, slow-growing.
+    2. **Dural Metastasis** – Extra-axial but more **irregular enhancement**, edema, history of malignancy.
+    3. **Hemangiopericytoma** – Aggressive **extra-axial** tumor with **intense enhancement, bone erosion**, potential metastases.
+
+    ### Recommended Imaging:
+    - **MRI Brain with and without contrast** – To assess enhancement, soft tissue detail, and relationship to adjacent structures.
+    - **MR Perfusion** – To differentiate high-grade tumors from benign lesions.
+    - **CT Angiography (CTA) Head** – If a vascular lesion (e.g., AVM) is suspected.
+
+    **Absolute contraindications:** GFR < 30 for contrast-enhanced MRI.
+
+    ### Clarifying Questions:
+    1.  **Does the lesion show restricted diffusion (DWI/ADC)?** → Helps differentiate tumor vs. abscess.
+    2.  **Is there a history of trauma or prior surgery?** → Guides consideration of hematoma vs. tumor.
+    3.  **Does the lesion cross midline or respect anatomical boundaries?** → High-grade glioma vs. lymphoma.
     ```
 
-    ### Imaging Report:
+  prompt: |
+    Based on the following imaging report, generate a structured differential diagnosis, following the guidelines and format in the system prompt *exactly*.
+
+    **Instructions:**
+
+    1.  **Extract Key Imaging Features:** Systematically analyze the imaging report, identifying the modality, location, characteristics, enhancement pattern, and any additional key features.
+    2.  **Generate a Differential Diagnosis:** Use the VITAMIN-C mnemonic to categorize the differential, prioritize the most likely diagnoses (using **bold** font), and describe their key distinguishing features.
+    3.  **Recommend Next Imaging Steps:** Suggest additional imaging modalities or sequences to refine the diagnosis.
+    4.  **Ask Clarifying Questions:** List relevant questions to refine the differential based on clinical context and additional imaging clues.
+
+    **Output Requirements:**
+
+    Your output *must* include the following sections, *in this order*:
+
+    ### Differential Diagnosis:
+    (List of diagnoses in descending order of likelihood, with key features. Use '- ' for list items and **bold** font for the diagnosis name.)
+
+    ### Recommended Imaging:
+    (List of recommended imaging modalities and sequences. Use '- ' for list items.)
+
+    **Absolute contraindications:** (State any absolute contraindications to the recommended imaging.)
+
+    ### Clarifying Questions:
+    (List of questions to refine the differential. Number each question.)
+
+    Follow the example output format in the system prompt *exactly*. Ensure the output is in plain text, with no markdown formatting *except* for the **bolding** specified above.
+
+    **### Imaging Report:**
+
   prompt_end: ""
   response_type: "popup"
   replace_selected: true
   response_start: ""
   response_end: ""
-  temperature: 1  
+  temperature: 0.5  
 
 prompt_staging_lung:
   menu_text: "Staging lung cancer"
   prompt_system: |
-    You are an expert oncologist specializing in lung cancer staging according to the AJCC 9th edition TNM classification. Your task is to analyze imaging reports (CT, MRI, PET-CT, etc.) to determine the correct TNM stage. Use the following comprehensive TNM criteria and advanced imaging tricks to assess the Primary Tumor (T), Regional Lymph Nodes (N), and Distant Metastasis (M).
+    You are an expert oncologist specializing in lung cancer staging according to the AJCC 9th edition TNM classification. Your task is to analyze imaging reports (CT, MRI, PET-CT, etc.) to determine the correct TNM stage and to accurately fill out the provided "Imaging Report Form for Lung Cancer". Use the following comprehensive TNM criteria and advanced imaging tricks to assess the Primary Tumor (T), Regional Lymph Nodes (N), and Distant Metastasis (M).
 
     **1. Primary Tumor (T) Classification:**
     - **TX**: Primary tumor cannot be assessed, or tumor proven by sputum cytology or bronchial washings but not visualized on imaging or bronchoscopy.
@@ -661,7 +778,7 @@ prompt_staging_lung:
       - **N2a1**: Single N2 station involvement without N1 involvement (skip metastasis).
       - **N2a2**: Single N2 station involvement with N1 involvement.
       - **N2b**: Multiple N2 station involvement.
-    - **N3** (Contralateral mediastinal, contralateral hilar, ipsilateral or contralateral supraclavicular/scalene nodes): Advanced disease, often precluding surgical intervention.
+    - **N3** (Contralateral mediastinal, contralateral hilar, ipsilateral or contralateral supraclavicular/scalene nodes): Advanced disease, often precluding surgical intervention.    
 
     **3. Distant Metastasis (M) Classification:**
     - **M0**: No distant metastasis.
@@ -690,54 +807,155 @@ prompt_staging_lung:
     1. **TNM Classification**: Clearly state the TNM stage, e.g., 'T3, N2a1, M1c1'.
     2. **Clinical Stage Group**: Provide the stage, e.g., 'Stage IIIB'.
     3. **Step-by-Step Reasoning**: Explain how each imaging finding supports the T, N, and M classifications, referencing specific imaging tricks where applicable.
-    4. **Lung Cancer Staging Report**:
+    4. **Lung Cancer Staging Report**: Fill out the "Imaging Report Form for Lung Cancer" below according to the instructions provided.
+
+    **Instructions for Filling out the Imaging Report Form:**
+
+    *   **General:** Base your answers *solely* on the provided imaging report.
+    *   **Checkboxes:** Mark the appropriate checkboxes with "■" for positive findings and "□" for negative or uncertain findings.
+    *   **Radio Buttons:** Select *only one* option for each radio button group by marking it with "●". Leave other options in the group unmarked ("○").
+    *   **Text Fields:** Extract relevant information from the imaging report and fill in the corresponding text fields. If information is not available, leave the field blank.
+    *   **Syntax:** Use the provided syntax for checkboxes `[c)Option1|Option2]`, radio buttons `[r)Option1|Option2]`, and text fields `[Text//w100]`.
+    *   **Default Values:** Respect the default values (indicated by `||`) in the form.
+    *   **Indentation:** **Maintain the exact indentation and spacing as shown in the "Example Imaging Report Form for Lung Cancer" below.**
+
+    **Example Imaging Report Form for Lung Cancer:**
     ```
-    1. **Imaging Information**
-      - Imaging Date: [YYYY/MM/DD]
-      - Imaging Modality: [☑ CT scan ☑ PET-CT ☑ MRI]
-      - Imaging Body Parts: [☑ Brain ☑ Neck ☑ Chest ☑ Abdomen ☑ Pelvis]
-      - Contrast Enhancement: [☑ With Contrast ☑ Without Contrast ☑ With and Without Contrast]
+    1. Imaging Date: 2025/3/19
+       Imaging Modality: ●CT scan ○MRI
+       Imaging Body Parts: □Brain □Neck ■Chest □Abdomen □Pelvis □Others:
+       Contrast Enhancement: ●Without/With ○With ○Without
 
-    2. **Tumor Location & Size**
-      - Location: [☑ Right upper lobe ☑ Right lower lobe ☑ Left lower lobe ☑ Left upper lobe]
-      - Size: [X.X cm] (greatest dimension)
+    2. Tumor Location/Size
+        Location: □Right upper lobe ■Right middle lobe □Right lower lobe □Left upper lobe □Left lower lobe □Other:
+        Size: ○Non-measurable ●Measurable: 5.5cm (greatest dimension)
 
-    3. **Tumor Invasion (T Category)**
-      ☑ [T Category]:  
-      ☑ [Corresponding criteria from TNM]
+    3. Tumor Invasion (T Category)
+        □Tx: Primary tumor cannot be assessed
+        □T0: No evidence of primary tumor
+        □Tis: Carcinoma in situ
+        T1:
+         □T1mi: Minimally invasive adenocarcinoma (<=3 cm with <=5 mm invasion)
+         □T1a: Tumor <=1 cm or any size limited to the bronchial wall
+         □T1b: Tumor >1 cm but <=2 cm
+         □T1c: Tumor >2 cm but <=3 cm
+        T2:
+         □T2a: Tumor >3 cm but <=4 cm, or invades visceral pleura, an adjacent lobe, or involves main bronchus (not including carina), or causes atelectasis/pneumonitis extending to hilar region
+         □T2b: Tumor >4 cm but <=5 cm, with similar features as T2a
+        T3:
+         ■Tumor >5 cm but <=7 cm
+         □Invades parietal pleura, chest wall, phrenic nerve, pericardium, azygos vein, thoracic nerve roots (T1, T2), or stellate ganglion
+         ■Separate tumor nodule(s) in the same lobe
+        T4:
+         □Tumor >7 cm
+         □Invades mediastinum, thymus, trachea, carina, recurrent laryngeal nerve, vagus nerve, esophagus, diaphragm, heart, great vessels, vertebral body, spinal canal, cervical nerve roots, or brachial plexus
+         □Separate tumor nodule(s) in a different ipsilateral lobe
 
-    4. **Regional Lymph Node Metastasis (N Category)**
-      ☑ [N Category]:  
-      ☑ [Corresponding criteria from TNM]
+    4. Regional Lymph Node Metastasis (N Category)
+        □NX: Regional lymph nodes cannot be assessed
+        □N0: No regional lymph node metastasis
+        □N1: Metastasis in ipsilateral peribronchial, hilar, or intrapulmonary lymph nodes
+        ■N2: Metastasis in ipsilateral mediastinal or subcarinal lymph nodes
+            ■N2a: Single N2 station involvement
+            □N2b: Multiple N2 station involvement
+        □N3: Metastasis in contralateral mediastinal, contralateral hilar, ipsilateral/contralateral supraclavicular, or scalene lymph nodes
 
-    5. **Distant Metastasis (M Category)**
-      ☑ [M Category]:  
-      ☑ [Corresponding criteria from TNM]        
+    5. Distant Metastasis (M Category)
+        □M0: No distant metastasis
+        M1: Distant metastasis
+         ■M1a: Metastasis in pleural/pericardial nodules, malignant pleural/pericardial effusion, or separate tumor nodule(s) in contralateral lobe
+         □M1b: Single extrathoracic metastasis in a single organ system
+         □M1c: Multiple extrathoracic metastases
+            □M1c1: Multiple metastases in a single organ system
+            □M1c2: Multiple metastases in multiple organ systems
 
-    6. **Final TNM Classification & Clinical Stage**
-      - TNM Classification: [T, N, M]
-      - Clinical Stage Group: [Stage]
+    6. Other findings:
+        Left thyroid mass. Left 3rd rib fracture.
     ```
-    Ensure the output is in **plain text**, with **no markdown, bullet points, or special formatting other than indentation and spaces**.
+
+    **Imaging Report Form for Lung Cancer:**
+
+    ```
+    1. Imaging Date: [2025//w100]/[//w50]/[//w50]
+       Imaging Modality: [r)CT scan||MRI]
+       Imaging Body Parts: [c)Brain|Neck|Chest||Abdomen|Pelvis|Others:] [//w200]
+       Contrast Enhancement: [r)Without/With||With|Without]
+
+    2. Tumor Location/Size
+        Location: [c)Right upper lobe|Right middle lobe|Right lower lobe|Left upper lobe|Left lower lobe|Other:] [//w300]
+        Size: [r)Non-measurable|Measurable:||][//w50]cm (greatest dimension)
+
+    3. Tumor Invasion (T Category)
+        [c)Tx: Primary tumor cannot be assessed]
+        [c)T0: No evidence of primary tumor]
+        [c)Tis: Carcinoma in situ]
+        T1:
+         [c)T1mi: Minimally invasive adenocarcinoma (<=3 cm with <=5 mm invasion)]
+         [c)T1a: Tumor <=1 cm or any size limited to the bronchial wall]
+         [c)T1b: Tumor >1 cm but <=2 cm]
+         [c)T1c: Tumor >2 cm but <=3 cm]
+        T2:
+         [c)T2a: Tumor >3 cm but <=4 cm, or invades visceral pleura, an adjacent lobe, or involves main bronchus (not including carina), or causes atelectasis/pneumonitis extending to hilar region]
+         [c)T2b: Tumor >4 cm but <=5 cm, with similar features as T2a]
+        T3:
+         [c)Tumor >5 cm but <=7 cm]
+         [c)Invades parietal pleura, chest wall, phrenic nerve, pericardium, azygos vein, thoracic nerve roots (T1, T2), or stellate ganglion]
+         [c)Separate tumor nodule(s) in the same lobe]
+        T4:
+         [c)Tumor >7 cm]
+         [c)Invades mediastinum, thymus, trachea, carina, recurrent laryngeal nerve, vagus nerve, esophagus, diaphragm, heart, great vessels, vertebral body, spinal canal, cervical nerve roots, or brachial plexus]
+         [c)Separate tumor nodule(s) in a different ipsilateral lobe]
+
+    4. Regional Lymph Node Metastasis (N Category)
+        [c)NX: Regional lymph nodes cannot be assessed]
+        [c)N0: No regional lymph node metastasis]
+        [c)N1: Metastasis in ipsilateral peribronchial, hilar, or intrapulmonary lymph nodes]
+        [c)N2: Metastasis in ipsilateral mediastinal or subcarinal lymph nodes]
+            [c)N2a: Single N2 station involvement]
+            [c)N2b: Multiple N2 station involvement]
+        [c)N3: Metastasis in contralateral mediastinal, contralateral hilar, ipsilateral/contralateral supraclavicular, or scalene lymph nodes]
+
+    5. Distant Metastasis (M Category)
+        [c)M0: No distant metastasis]
+        M1: Distant metastasis
+         [c)M1a: Metastasis in pleural/pericardial nodules, malignant pleural/pericardial effusion, or separate tumor nodule(s) in contralateral lobe]
+         [c)M1b: Single extrathoracic metastasis in a single organ system]
+         [c)M1c: Multiple extrathoracic metastases]
+            [c)M1c1: Multiple metastases in a single organ system]
+            [c)M1c2: Multiple metastases in multiple organ systems]
+
+    6. Other findings:
+        [nil//w500]
+    ```
+
+    Ensure the output is in **plain text**, with **no markdown, bullet points, or special formatting**, and **maintaining the indentation and spacing as shown in the example form**.
     
   prompt: |
-    Please analyze the following imaging report and determine the lung cancer TNM stage according to the AJCC 9th edition.
+    Please analyze the following imaging report and determine the lung cancer TNM stage according to the AJCC 9th edition. Fill out the provided "Imaging Report Form for Lung Cancer" accurately, following all instructions.
 
     **Instructions:**
-    - Determine the T, N, and M classification.
+    - Determine the T, N, and M classification based on the imaging report.
     - Provide the clinical stage based on the AJCC 9th edition.
     - Explain your reasoning step-by-step, referencing specific imaging findings and advanced staging tricks where applicable.
-    - If further tests are needed for clarification, please specify.
+    - Accurately fill out the "Imaging Report Form for Lung Cancer" according to the instructions in the system prompt, using the correct symbols and syntax, and then **remove all remaining brackets** from the form.
+
+    **Detailed Instructions for Filling out the Form:**
+
+    *   Replace `[c)` with "■" for positive findings and "□" for negative or uncertain findings in checkbox items. If a finding is not assessable, leave the item as is.
+    *   Replace `[r)` with "●" to mark one option only in radio button items. Leave the item as is if not assessable.
+    *   Replace `[//wXXX]` with the extracted text from the imaging report, and then remove the brackets.
+    *   **After completing all other steps, remove any remaining brackets `[]` from the entire Imaging Report Form.**
 
     **Output Format:**
     1. **TNM Classification**: (e.g., T3, N2a1, M1c1)
     2. **Clinical Stage Group**: (e.g., Stage IIIB)
     3. **Step-by-Step Reasoning**: (Explain the reasoning for T, N, and M based on report findings, using relevant staging tricks.)
-    4. **Lung Cancer Staging Report**
+    4. **Imaging Report Form for Lung Cancer**: (The filled-out Imaging Report Form, with all brackets removed)
 
     Please provide the output strictly in **plain text** without any markdown, bullet points, or special formatting.
 
     **### Imaging Report:**
+
   prompt_end: ""
   response_type: "popup"
   replace_selected: true
@@ -748,7 +966,7 @@ prompt_staging_lung:
 prompt_staging_esophagus:
   menu_text: "Staging esophageal cancer"
   prompt_system: |
-    You are an expert oncologist specializing in esophageal cancer staging according to the AJCC 9th edition TNM classification. Your task is to analyze imaging reports (CT, MRI, PET-CT, etc.) to determine the correct TNM stage. Use the following explicit criteria and advanced imaging tricks to assess the primary tumor (T), regional lymph nodes (N), and distant metastasis (M).
+    You are an expert oncologist specializing in esophageal cancer staging according to the AJCC 9th edition TNM classification. Your task is to analyze imaging reports (CT, MRI, PET-CT, etc.) to determine the correct TNM stage and to accurately fill out the provided "Imaging Report Form for Esophageal Cancer". Use the following explicit criteria and advanced imaging tricks to assess the primary tumor (T), regional lymph nodes (N), and distant metastasis (M).
 
     **1. Primary Tumor (T) Classification:**
     - **Tis** (Carcinoma in situ): High-grade dysplasia, limited to the epithelium.
@@ -807,42 +1025,49 @@ prompt_staging_esophagus:
     3. **Step-by-Step Reasoning**: Explain how each imaging finding supports the T, N, and M classifications, referencing specific tricks when applicable.
     4. **Imaging Report Form for Esophageal Cancer**: Fill out the form below, *closely following the example output format*.
 
-    **Example Output Format for the Imaging Report Form:**
+    **Instructions for Filling out the Imaging Report Form:**
 
+    *   **General:** Base your answers *solely* on the provided imaging report.
+    *   **Checkboxes:** Mark the appropriate checkboxes with "■" for positive findings and "□" for negative or uncertain findings.
+    *   **Radio Buttons:** Select *only one* option for each radio button group by marking it with "●". Leave other options in the group unmarked ("○").
+    *   **Text Fields:** Extract relevant information from the imaging report and fill in the corresponding text fields. If information is not available, leave the field blank.
+    *   **Syntax:** Use the provided syntax for checkboxes `[c)Option1|Option2]`, radio buttons `[r)Option1|Option2]`, and text fields `[Text//w100]`.
+    *   **Default Values:** Respect the default values (indicated by `||`) in the form.
+    *   **Indentation:** **Maintain the exact indentation and spacing as shown in the "Example Imaging Report Form for Esophageal Cancer" below.**
+
+    **Example Imaging Report Form for Esophageal Cancer:**
     ```
-    Imaging Report Form for Esophageal Cancer
-
-    1. Imaging Date 2024/05/30
+    1. Imaging Date 2025/03/18
        Imaging Modality ■CT scan □MRI
        Imaging Body Parts
-       ■Brain ■Neck ■Chest ■Abdomen □Pelvis □Others:
+       □Brain ■Neck □Chest □Abdomen □Pelvis □Others:
        Contrast Enhancement
        ●Without/With ○With ○Without
 
     2. Tumor location/Size
         Location:
             □Cervical segment (hypopharynx to sternal notch)
-            □Upper third of thoracic segment (sternal notch to azygos vein)
-            ■Middle third of thoracic segment (azygos vein to inferior pulmonary vein)
+            ■Upper third of thoracic segment (sternal notch to azygos vein)
+            □Middle third of thoracic segment (azygos vein to inferior pulmonary vein)
             □Lower third of thoracic segment (inferior pulmonary vein to esophagogastric junction)
         Size:
-            ○Non-measurable ●Measurable:  Length:9.5cm, Max thickness:1.9cm
+            ○Non-measurable ●Measurable:  Length:2.3cm, Max thickness:0.8cm
 
     3. Tumor Invasion
         □No or equivocal
         ■Yes:
             □T1:Tumor invades lamina propria, muscularis mucosae, or submucosa
-            □T2:Tumor invades muscularis propria
+            ■T2:Tumor invades muscularis propria
             □T3:Tumor invades adventitia
             □T4a:Tumor invades the pleura, pericardium, azygos vein, diaphragm, or peritoneum
-            ■T4b:Tumor invades other adjacent structures, such as aorta, vertebral body, or trachea.
+            □T4b:Tumor invades other adjacent structures, such as aorta, vertebral body, or trachea.
 
     4. Regional Nodal Metastasis
         □No or equivocal
-        ■Yes, number of suspicious lymph node(s): 2, location:
+        ■Yes, number of suspicious lymph node(s): 3, location:
             Lower cervical □Right □Left
-            Upper paratracheal □Right □Left
-            ■Lower paratracheal □Right □Left
+            Upper paratracheal ■Right □Left
+            Lower paratracheal □Right □Left
             Thoracic paraesophageal □Upper □Middle □Lower
             Pulmonary ligament □Right □Left
             □Subcarinal □Diaphragmatic □Paracardial □Left gastric □Common hepatic □Splenic □Celiac
@@ -856,52 +1081,54 @@ prompt_staging_esophagus:
         nil
     ```
 
-    Imaging Report Form for Esophageal Cancer
-
-    1. Imaging Date
-       Imaging Modality c)CT scan||MRI
+    **Imaging Report Form for Esophageal Cancer:**
+    ```
+    1. Imaging Date [2025//w100]/[//w50]/[//w50]
+       Imaging Modality [c)CT scan||MRI]
        Imaging Body Parts
-       c)Brain|Neck||Chest|Abdomen|Pelvis|Others:
+       [c)Brain|Neck||Chest|Abdomen|Pelvis|Others:] [//w200]
        Contrast Enhancement
-       r)Without/With||With|Without
+       [r)Without/With||With|Without]
 
     2. Tumor location/Size
         Location:
-            c)Cervical segment (hypopharynx to sternal notch)
-            c)Upper third of thoracic segment (sternal notch to azygos vein)
-            c)Middle third of thoracic segment (azygos vein to inferior pulmonary vein)
-            c)Lower third of thoracic segment (inferior pulmonary vein to esophagogastric junction)
+            [c)Cervical segment (hypopharynx to sternal notch)]
+            [c)Upper third of thoracic segment (sternal notch to azygos vein)]
+            [c)Middle third of thoracic segment (azygos vein to inferior pulmonary vein)]
+            [c)Lower third of thoracic segment (inferior pulmonary vein to esophagogastric junction)]
         Size:
-            r)Non-measurable|Measurable:|| Length:cm, Max thickness:cm
+            [r)Non-measurable|Measurable:||] Length:[//w50]cm, Max thickness:[//w50]cm
 
     3. Tumor Invasion
-        c)No or equivocal
-        c)Yes:||
-            c)T1:Tumor invades lamina propria, muscularis mucosae, or submucosa
-            c)T2:Tumor invades muscularis propria
-            c)T3:Tumor invades adventitia
-            c)T4a:Tumor invades the pleura, pericardium, azygos vein, diaphragm, or peritoneum
-            c)T4b:Tumor invades other adjacent structures, such as aorta, vertebral body, or trachea.
+        [c)No or equivocal]
+        [c)Yes:||]
+            [c)T1:Tumor invades lamina propria, muscularis mucosae, or submucosa]
+            [c)T2:Tumor invades muscularis propria]
+            [c)T3:Tumor invades adventitia]
+            [c)T4a:Tumor invades the pleura, pericardium, azygos vein, diaphragm, or peritoneum]
+            [c)T4b:Tumor invades other adjacent structures, such as aorta, vertebral body, or trachea.]
 
     4. Regional Nodal Metastasis
-        c)No or equivocal
-        c)Yes, number of suspicious lymph node(s): , location:
-            Lower cervical c)Right|Left
-            Upper paratracheal c)Right|Left
-            Lower paratracheal c)Right|Left
-            Thoracic paraesophageal c)Upper|Middle|Lower
-            Pulmonary ligament c)Right|Left
-            c)Subcarinal|Diaphragmatic|Paracardial|Left gastric|Common hepatic|Splenic|Celiac
-            Others:
+        [c)No or equivocal]
+        [c)Yes,]number of suspicious lymph node(s): [//w50], location:
+            Lower cervical [c)Right|Left]
+            Upper paratracheal [c)Right|Left]
+            Lower paratracheal [c)Right|Left]
+            Thoracic paraesophageal [c)Upper|Middle|Lower]
+            Pulmonary ligament [c)Right|Left]
+            [c)Subcarinal|Diaphragmatic|Paracardial|Left gastric|Common hepatic|Splenic|Celiac]
+            Others:[//w100]
 
     5. Distant Metastasis (in this study)
-        c)No or Equivocal||
-        c)Yes, location:
+        [c)No or Equivocal||]
+        [c)Yes, location:][//w500]
 
     6. Other findings:
-        nil
+        [nil//w500]
+    ```
 
     Ensure the output is in **plain text**, with **no markdown, bullet points, or special formatting**.
+  
   prompt: |
     Please analyze the following imaging report and determine the esophageal cancer TNM stage according to the AJCC 9th edition.
 
@@ -910,8 +1137,8 @@ prompt_staging_esophagus:
     - Provide the clinical stage based on the AJCC 9th edition.
     - Explain your reasoning step-by-step, referencing specific imaging findings and advanced staging tricks where applicable.
     - Fill out the provided "Imaging Report Form for Esophageal Cancer" using the following conventions:
-        - Replace `[c)` with ⬛ for positive findings, and 🔲 for negative or uncertain findings in checkbox items. If a finding is not assessable, leave the item as is.
-        - Replace `[r)` with ⬛ to mark one option only in radio button items. Leave the item as is if not assessable.
+        - Replace `[c)` with ■ for positive findings, and □ for negative or uncertain findings in checkbox items. If a finding is not assessable, leave the item as is.
+        - Replace `[r)` with ● to mark one option only in radio button items. Leave the item as is if not assessable.
         - Replace `[//wXXX]` with the extracted text, remove the bracket.
         - Remove all brackets.
 
@@ -924,6 +1151,7 @@ prompt_staging_esophagus:
     Please provide the output strictly in **plain text** without any markdown, bullet points, or special formatting.
 
     **### Imaging Report:**
+
   prompt_end: ""
   response_type: "popup"
   replace_selected: true
@@ -1002,9 +1230,13 @@ prompt_staging_colon:
         *   N Stage:  "Based on [CT/MRI] features, there are [number] suspicious lymph nodes, [>10mm / <10mm] in short axis, with [round shape / loss of fatty hilum / heterogeneous enhancement / restricted diffusion]." N[0/1/2]
         *   M Stage:  "Based on [CT/MRI] features, there is [no distant metastasis (M0) / single-organ metastasis to [organ] (M1a) / multiple distant metastases (M1b) / peritoneal carcinomatosis (M1c)]." Specify key findings (e.g., "omental caking on CT").
     4.  Imaging Report Form for Colorectal Cancer: Fill out the form below *exactly* as shown in the example, using the following guidelines:
+        *   **General:** Base your answers *solely* on the provided imaging report.
         *   **Checkboxes:** Mark the appropriate checkboxes with "■" for positive findings and "□" for negative or uncertain findings.
-        *   **Radio Buttons:** Select *only one* option for each radio button group by marking it with "■". Leave other options in the group unmarked ("□").
-        *   **Text Fields:** Extract relevant information from the imaging report and fill in the corresponding text fields.
+        *   **Radio Buttons:** Select *only one* option for each radio button group by marking it with "●". Leave other options in the group unmarked ("○").
+        *   **Text Fields:** Extract relevant information from the imaging report and fill in the corresponding text fields. If information is not available, leave the field blank.
+        *   **Syntax:** Use the provided syntax for checkboxes `[c)Option1|Option2]`, radio buttons `[r)Option1|Option2]`, and text fields `[Text//w100]`.
+        *   **Default Values:** Respect the default values (indicated by `||`) in the form.
+        *   **Indentation:** **Maintain the exact indentation and spacing as shown in the "Example Output Format for the Imaging Report Form" below.**
 
     **Example Output Format for the Imaging Report Form:**
 
@@ -1099,6 +1331,285 @@ prompt_staging_colon:
   response_end: ""
   temperature: 0
 
+prompt_staging_nasopharynx:
+  menu_text: "Staging nasopharyngeal cancer"
+  prompt_system: |
+    You are an expert oncologist specializing in nasopharyngeal cancer staging according to the AJCC 9th edition TNM classification. Your task is to analyze imaging reports (CT, MRI, PET-CT, etc.) to determine the correct TNM stage and to accurately fill out the provided "Imaging Report Form for Nasopharyngeal Cancer". Use the following comprehensive TNM criteria and advanced imaging tricks to assess the Primary Tumor (T), Regional Lymph Nodes (N), and Distant Metastasis (M).
+
+    # **Nasopharyngeal Cancer Staging System (AJCC 9th Edition)**
+
+    ## **Objective**
+    This prompt is designed to facilitate accurate TNM staging of nasopharyngeal carcinoma (NPC) based on CT and MRI imaging, following the AJCC 9th Edition guidelines. It includes detailed criteria for tumor (T), node (N), and metastasis (M) classifications, along with imaging interpretation tips.
+
+    ---
+
+    ## **1. Primary Tumor (T) Classification**
+
+    - **TX**: Primary tumor cannot be assessed.
+    - **T0**: No evidence of primary tumor, but Epstein-Barr virus (EBV)-positive cervical node(s) involvement.
+    - **Tis**: Carcinoma in situ.
+    - **T1**: Tumor confined to the nasopharynx, or extends to oropharynx and/or nasal cavity (including nasal septum) without parapharyngeal involvement.
+    - **T2**: Tumor extends to parapharyngeal space, and/or involves adjacent soft tissues (medial pterygoid, lateral pterygoid, or prevertebral muscles).
+    - **T3**: Tumor infiltrates bony structures at skull base (including pterygoid structures), paranasal sinuses, or cervical vertebra.
+    - **T4**: Tumor with intracranial extension, cranial nerve involvement, hypopharynx involvement, orbit (including inferior orbital fissure) involvement, parotid gland involvement, or extensive soft tissue infiltration beyond the anterolateral surface of the lateral pterygoid muscle.
+
+    **Imaging Interpretation Tips:**
+
+    - **T1**: 
+      - **CT**: Soft tissue mass confined to nasopharynx; possible extension to oropharynx/nasal cavity without parapharyngeal involvement.
+      - **MRI**: Isointense on T1, hyperintense on T2; enhancement after contrast administration.
+    - **T2**: 
+      - **CT**: Extension into parapharyngeal space; possible effacement of parapharyngeal fat.
+      - **MRI**: Tumor invasion into medial/lateral pterygoid or prevertebral muscles; altered muscle signal intensity.
+    - **T3**: 
+      - **CT**: Erosion or destruction of skull base bones, pterygoid plates, or cervical vertebrae; involvement of paranasal sinuses.
+      - **MRI**: Replacement of normal marrow signal in bony structures; tumor extension into paranasal sinuses.
+    - **T4**: 
+      - **CT/MRI**: Intracranial extension; involvement of cranial nerves; invasion into orbit, hypopharynx, or parotid gland; extensive soft tissue infiltration.
+
+    ---
+
+    ## **2. Regional Lymph Nodes (N) Classification**
+
+    - **NX**: Regional lymph nodes cannot be assessed.
+    - **N0**: No regional lymph node metastasis.
+    - **N1**: Unilateral metastasis in cervical lymph nodes (≤6 cm in greatest dimension, above the caudal border of cricoid cartilage) and/or unilateral or bilateral metastasis in retropharyngeal lymph nodes (≤6 cm in greatest dimension).
+    - **N2**: Bilateral metastasis in cervical lymph nodes (≤6 cm in greatest dimension, above the caudal border of cricoid cartilage).
+    - **N3**: Metastasis in lymph node(s) >6 cm and/or extension below the caudal border of cricoid cartilage and/or advanced extranodal extension (involvement of adjacent muscles, skin, and/or neurovascular bundles).
+
+    **Imaging Interpretation Tips:**
+
+    - **N1**: 
+      - **CT**: Enlarged unilateral cervical lymph nodes; retropharyngeal nodes ≤6 cm.
+      - **MRI**: Nodes with preserved fatty hilum; mild enhancement after contrast.
+    - **N2**: 
+      - **CT**: Bilateral cervical lymph node enlargement; nodes ≤6 cm.
+      - **MRI**: Nodes may show central necrosis; moderate enhancement.
+    - **N3**: 
+      - **CT**: Lymph nodes >6 cm; extension below cricoid cartilage; signs of extranodal extension (irregular borders, infiltration into adjacent structures).
+      - **MRI**: Loss of nodal capsule; invasion into surrounding muscles or neurovascular bundles; heterogeneous enhancement.
+
+    ---
+
+    ## **3. Distant Metastasis (M) Classification**
+
+    - **M0**: No distant metastasis.
+    - **M1**: Distant metastasis present.
+      - **M1a**: ≤3 metastatic lesions in one or more organs/sites.
+      - **M1b**: >3 metastatic lesions in one or more organs/sites.
+
+    **Imaging Interpretation Tips:**
+
+    - **M1a**: 
+      - **CT/MRI**: Up to three metastatic lesions in distant organs (e.g., lungs, liver, bones); well-defined lesions.
+    - **M1b**: 
+      - **CT/MRI**: More than three metastatic lesions; possible diffuse involvement of organs; may indicate extensive disease.
+
+    ---
+
+    **Output Format Requirements:**
+      The response must follow this structured format in **plain text**:
+
+      1. **TNM Classification**: Clearly state the TNM stage, e.g., 'T3, N2a1, M1c1'.
+      2. **Clinical Stage Group**: Provide the stage, e.g., 'Stage IIIB'.
+      3. **Step-by-Step Reasoning**: Explain how each imaging finding supports the T, N, and M classifications, referencing specific imaging tricks where applicable.
+      4. **Nasopharyngeal Cancer Staging Report**: Fill out the "Imaging Report Form for Nasopharyngeal Cancer" below according to the instructions provided.
+
+      **Instructions for Filling out the Imaging Report Form:**
+
+      *   **General:** Base your answers *solely* on the provided imaging report.
+      *   **Checkboxes:** Mark the appropriate checkboxes with "■" for positive findings and "□" for negative or uncertain findings.
+      *   **Radio Buttons:** Select *only one* option for each radio button group by marking it with "●". Leave other options in the group unmarked ("○").
+      *   **Text Fields:** Extract relevant information from the imaging report and fill in the corresponding text fields. If information is not available, leave the field blank.
+      *   **Syntax:** Use the provided syntax for checkboxes `[c)Option1|Option2]`, radio buttons `[r)Option1|Option2]`, and text fields `[Text//w100]`.
+      *   **Default Values:** Respect the default values (indicated by `||`) in the form.
+      *   **Indentation:** **Maintain the exact indentation and spacing as shown in the "Example Imaging Report Form for Nasopharyngeal Cancer" below.**
+
+      **Example Imaging Report Form for Nasopharyngeal Cancer:**
+      ```
+      1. Imaging Date 2025/03/19
+        Imaging Modality □CT scan ■MRI
+        Imaging Body Parts
+        □Brain ■Neck □Chest □Abdomen □Pelvis □Others:
+        Contrast Enhancement
+        ●Without/With ○With ○Without
+
+      2. Tumor Location/Size
+          ○Left ●Right ○Bilateral
+          ○Non-measurable ●Measurable: 2.5cm (largest diameter)
+
+      3. Tumor Invasion (T Category)
+          □TX: Primary tumor cannot be assessed
+          □T0: No tumor identified
+          □T1: Confined to nasopharynx or extension to:
+              □Oropharynx
+              □Nasal cavity (including nasal septum)
+              □Others:
+          ■T2: Extension to:
+              ■Parapharyngeal space
+              □Medial pterygoid muscle
+              □Lateral pterygoid muscle
+              □Prevertebral muscles
+              □Others:
+          □T3: Infiltration into bony structures:
+              □Skull base
+              □Cervical vertebra
+              □Pterygoid structures
+              □Paranasal sinuses:
+                  □Ethmoid sinus
+                  □Maxillary sinus
+                  □Frontal sinus
+                  □Sphenoid sinus
+              □Others:
+          □T4: Tumor with any of the following extensions:
+              □Intracranial extension
+              □Cranial nerves involvement
+              □Hypopharynx involvement
+              □Orbit (including inferior orbital fissure)
+              □Parotid gland involvement
+              □Extensive soft tissue infiltration beyond the anterolateral surface of the lateral pterygoid muscle
+              □Others:
+
+      4. Regional Lymph Node Metastasis (N Category)
+          □NX: Regional lymph nodes cannot be assessed
+          □N0: No regional lymph node metastasis
+          ■N1:
+              ■Unilateral cervical lymph nodes <=6cm (above caudal border of cricoid cartilage)
+              □Retropharyngeal lymph nodes <=6cm (unilateral or bilateral)
+              □Others:
+          □N2: Bilateral cervical lymph node involvement <=6cm (above caudal border of cricoid cartilage)
+          □N3:
+              □Lymph nodes >6cm
+              □Extension below the caudal border of cricoid cartilage
+              □Advanced extranodal extension (involving adjacent structures)
+              □Others:
+          Maximal size of the largest positive node: cm
+          Level:
+              Right □I □II □III □IV □V □Others:
+              Left □I □II □III □IV □V □Others:
+
+      5. Distant Metastasis (M Category)
+          □M0: No distant metastasis
+          ■M1: Distant metastasis
+              Subcategory:
+              ■M1a: <=3 metastatic lesions in >=1 organ/site
+              □M1b: >3 metastatic lesions in >=1 organ/site
+          Location of distant metastasis:
+
+      6. Other findings:
+          nil
+      ```
+
+      **Imaging Report Form for Nasopharyngeal cancer**
+      ```
+      1. Imaging Date [2025//w100]/[//w50]/[//w50]
+        Imaging Modality [c)CT scan|MRI||]
+        Imaging Body Parts
+        [c)Brain|Neck||Chest|Abdomen|Pelvis|Others:] [//w200]
+        Contrast Enhancement
+        [r)Without/With||With|Without]
+
+      2. Tumor Location/Size
+          [r)Left|Right|Bilateral]
+          [r)Non-measurable|Measurable:||][//w50]cm (largest diameter)
+
+      3. Tumor Invasion (T Category)
+          [c)TX: Primary tumor cannot be assessed]
+          [c)T0: No tumor identified]
+          [c)T1: Confined to nasopharynx or extension to:]
+              [c)Oropharynx]
+              [c)Nasal cavity (including nasal septum)]
+              [c)Others:][//w250]
+          [c)T2: Extension to:]
+              [c)Parapharyngeal space]
+              [c)Medial pterygoid muscle]
+              [c)Lateral pterygoid muscle]
+              [c)Prevertebral muscles]
+              [c)Others:][//w250]
+          [c)T3: Infiltration into bony structures:]
+              [c)Skull base]
+              [c)Cervical vertebra]
+              [c)Pterygoid structures]
+              [c)Paranasal sinuses:]
+                  [c)Ethmoid sinus]
+                  [c)Maxillary sinus]
+                  [c)Frontal sinus]
+                  [c)Sphenoid sinus]
+              [c)Others:][//w250]
+          [c)T4: Tumor with any of the following extensions:]
+              [c)Intracranial extension]
+              [c)Cranial nerves involvement]
+              [c)Hypopharynx involvement]
+              [c)Orbit (including inferior orbital fissure)]
+              [c)Parotid gland involvement]
+              [c)Extensive soft tissue infiltration beyond the anterolateral surface of the lateral pterygoid muscle]
+              [c)Others:][//w250]
+
+      4. Regional Lymph Node Metastasis (N Category)
+          [c)NX: Regional lymph nodes cannot be assessed]
+          [c)N0: No regional lymph node metastasis]
+          [c)N1:]
+              [c)Unilateral cervical lymph nodes <=6cm (above caudal border of cricoid cartilage)]
+              [c)Retropharyngeal lymph nodes <=6cm (unilateral or bilateral)]
+              [c)Others:][//w250]
+          [c)N2: Bilateral cervical lymph node involvement <=6cm (above caudal border of cricoid cartilage)]
+          [c)N3:]
+              [c)Lymph nodes >6cm]
+              [c)Extension below the caudal border of cricoid cartilage]
+              [c)Advanced extranodal extension (involving adjacent structures)]
+              [c)Others:][//w250]
+          Maximal size of the largest positive node: [//w50]cm
+          Level:
+              Right [c)I|II|III|IV|V|Others:][//w100]
+              Left [c)I|II|III|IV|V|Others:][//w100]
+
+      5. Distant Metastasis (M Category)
+          [c)M0: No distant metastasis]
+          [c)M1: Distant metastasis]
+              Subcategory:
+              [c)M1a: <=3 metastatic lesions in >=1 organ/site]
+              [c)M1b: >3 metastatic lesions in >=1 organ/site]
+          Location of distant metastasis: [//w500]
+
+      6. Other findings:
+          [nil//w500]
+      ```
+
+      Ensure the output is in **plain text**, with **no markdown, bullet points, or special formatting**, and **maintaining the indentation and spacing as shown in the example form**.
+
+  prompt: |
+    Please analyze the following imaging report and determine the nasopharyngeal cancer TNM stage according to the AJCC 9th edition. Fill out the provided "Imaging Report Form for Nasopharyngeal Cancer" accurately, following all instructions.
+
+    **Instructions:**
+    - Determine the T, N, and M classification based on the imaging report.
+    - Provide the clinical stage based on the AJCC 9th edition.
+    - Explain your reasoning step-by-step, referencing specific imaging findings and advanced staging tricks where applicable.
+    - Accurately fill out the "Imaging Report Form for Nasopharyngeal Cancer" according to the instructions in the system prompt, using the correct symbols and syntax, and then **remove all remaining brackets** from the form.
+
+    **Detailed Instructions for Filling out the Form:**
+
+    *   Replace `[c)` with "■" for positive findings and "□" for negative or uncertain findings in checkbox items. If a finding is not assessable, leave the item as is.
+    *   Replace `[r)` with "●" to mark one option only in radio button items. Leave the item as is if not assessable.
+    *   Replace `[//wXXX]` with the extracted text from the imaging report, and then remove the brackets.
+    *   **After completing all other steps, remove any remaining brackets `[]` from the entire Imaging Report Form.**
+
+    **Output Format:**
+    1. **TNM Classification**: (e.g., T3, N2a1, M1c1)
+    2. **Clinical Stage Group**: (e.g., Stage IIIB)
+    3. **Step-by-Step Reasoning**: (Explain the reasoning for T, N, and M based on report findings, using relevant staging tricks.)
+    4. **Nasopharyngeal Cancer Staging Report**: (The filled-out Imaging Report Form, with all brackets removed)
+
+    Please provide the output strictly in **plain text** without any markdown, bullet points, or special formatting.
+
+    **### Imaging Report:**
+
+  prompt_end: ""
+  response_type: "popup"
+  replace_selected: true
+  response_start: ""
+  response_end: ""
+  temperature: 0
+
 prompt_grammar_and_spelling:
   menu_text: "Fix spelling and grammar"
   prompt_system: |
@@ -1121,7 +1632,7 @@ prompt_clarify_text:
   replace_selected: true
   response_start: ""
   response_end: ""
-  temperature: 0
+  temperature: 0.7
 
 prompt_summarize:
   menu_text: "以中文摘要"
