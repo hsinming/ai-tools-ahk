@@ -17,7 +17,7 @@ _settingFile := ".\settings.ini"
 _promptFile := ".\prompts.yaml"
 _running := false
 _settingsCache := Map()
-_lastModified := FileGetTime(_settingFile)
+_lastModified := FileGetTime(_promptFile)
 _displayResponse := false
 _activeWin := ""
 _oldClipboard := ""
@@ -166,7 +166,7 @@ SelectText() {
     ; 1️⃣ Try to copy selected text using Ctrl+C
     A_Clipboard := ""  ; Clear clipboard
     Send("^c")
-    ClipWait(2)
+    ClipWait(1)
 
     if A_Clipboard != "" { ; If text was copied, restore clipboard and exit
         RestoreClipboard()
@@ -215,6 +215,8 @@ GetSelectedText() {
         if focusedControl
             text := ControlGetText(focusedControl, "A")
     }    
+    
+    text := deIdentify(text)
 
     ; Final checks:
     if StrLen(text) > 128000
@@ -224,6 +226,40 @@ GetSelectedText() {
         Throw ValueError("No text selected", -1)
 
     return text
+}
+
+deIdentify(medical_history) {
+    ; 1. Names
+    medical_history := RegExReplace(medical_history, "[\x{4e00}-\x{9fa5}]{2,4}", "[DE-IDENTIFIED_CHINESE_NAME]") ; Chinese Names
+    medical_history := RegExReplace(medical_history, "\b[A-Z][a-z]+\s[A-Z][a-z]+\b", "[DE-IDENTIFIED_ENGLISH_NAME]") ; English Names (2 words)
+    medical_history := RegExReplace(medical_history, "\b[A-Z][a-z]+\s[A-Z][a-z]+\s[A-Z][a-z]+\b", "[DE-IDENTIFIED_ENGLISH_NAME]") ; English Names (3 words)
+
+    ; 2. National Identification Numbers (國民身分證字號)
+    medical_history := RegExReplace(medical_history, "\b[A-Z]{1}[12]\d{8}\b", "[DE-IDENTIFIED_NATIONAL_ID]")
+
+    ; 3. Resident Certificate Numbers (居留證號碼)
+    medical_history := RegExReplace(medical_history, "\b[A-Z]{2}\d{8}\b", "[DE-IDENTIFIED_RESIDENT_ID]")
+
+    ; 4. Birthdates (出生日期)
+    ;medical_history := RegExReplace(medical_history, "\b\d{4}[-/]\d{2}[-/]\d{2}\b", "[DE-IDENTIFIED_BIRTHDATE]") ; YYYY-MM-DD
+    ;medical_history := RegExReplace(medical_history, "\b\d{2}[-/]\d{2}[-/]\d{4}\b", "[DE-IDENTIFIED_BIRTHDATE]") ; MM-DD-YYYY
+    ;medical_history := RegExReplace(medical_history, "\b\d{2}[-/]\d{2}[-/]\d{2}\b", "[DE-IDENTIFIED_BIRTHDATE]") ; DD-MM-YY (Ambiguous, be careful)
+    medical_history := RegExReplace(medical_history, "\b(民國|西元)\s*\d{2,3}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日\b", "[DE-IDENTIFIED_BIRTHDATE]") ; Chinese format
+
+    ; 5. Phone Numbers (電話號碼)
+    medical_history := RegExReplace(medical_history, "(0\d{1,2}-\d{6,8})", "[DE-IDENTIFIED_PHONE]") ; Landlines
+    medical_history := RegExReplace(medical_history, "(09\d{2}-\d{3}-\d{3})", "[DE-IDENTIFIED_PHONE]") ; Mobile (with hyphens)
+    medical_history := RegExReplace(medical_history, "(09\d{8})", "[DE-IDENTIFIED_PHONE]") ; Mobile (no hyphens)
+
+    ; 6. Email Addresses (電子郵件地址)
+    medical_history := RegExReplace(medical_history, "\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", "[DE-IDENTIFIED_EMAIL]")
+
+    ; 7. Medical Record Numbers/Patient IDs (病歷號碼/病人ID) - Example patterns, adjust as needed!
+    medical_history := RegExReplace(medical_history, "\b\d{7,10}\b", "[DE-IDENTIFIED_MEDICAL_ID]") ; 7-10 digit number
+    medical_history := RegExReplace(medical_history, "\b[A-Za-z]\d{6,8}\b", "[DE-IDENTIFIED_MEDICAL_ID]") ; Letter followed by 6-8 digits
+    medical_history := RegExReplace(medical_history, "\b[A-Za-z]{2}\d{5,7}\b", "[DE-IDENTIFIED_MEDICAL_ID]") ; Two letters followed by 5-7 digits
+
+    return medical_history
 }
 
 GetSettingFromINI(section, key, defaultValue := "") {
@@ -328,7 +364,9 @@ CallAPI(mode, promptName, input) {
     req.SetRequestHeader("Authorization", "Bearer " apiKey) ; OpenAI
     req.SetRequestHeader("api-key", apiKey) ; Azure
     req.SetRequestHeader('Content-Length', StrLen(bodyJson))
-    req.SetRequestHeader("If-Modified-Since", "Sat, 1 Jan 2000 00:00:00 GMT")    
+    req.SetRequestHeader("If-Modified-Since", "Sat, 1 Jan 2000 00:00:00 GMT")
+    req.SetRequestHeader("X-Title", "ai-tools-ahk")
+    req.SetRequestHeader("HTTP-Referer", "https://github.com/hsinming/ai-tools-ahk")    
     req.SetTimeouts(0, 0, 0, GetSettingFromINI("settings", "timeout", 120) * 1000) ; read, connect, send, receive
 
     try {
@@ -373,10 +411,10 @@ HandleResponse(response, mode, promptName, input) {
         }
         
         ;; Clean up response text
-        ; TODO: clean text first anyway, then replace "`n" with "`r`n" or just remark the next line ?
+        
         text := StrReplace(text, "`r", "") ; remove carriage returns        
         replaceSelected := ToBool(GetSettingFromYAML(promptName, "replace_selected", "true"))        
-        
+        ; TODO: clean text before replaceSelected
         if not replaceSelected {  ; Append Mode
             responseStart := GetSettingFromYAML(promptName, "response_start", "")
             responseEnd := GetSettingFromYAML(promptName, "response_end", "")
@@ -604,9 +642,9 @@ ShowWaitTooltip() {
 }
 
 CheckSettings() {
-    global _lastModified, _reload_on_change, _settingFile
-    if (_reload_on_change and FileExist(_settingFile)) {
-        lastModified := FileGetTime(_settingFile)
+    global _lastModified, _reload_on_change, _promptFile
+    if (_reload_on_change and FileExist(_promptFile)) {
+        lastModified := FileGetTime(_promptFile)
         if (lastModified != _lastModified) {
             _lastModified := lastModified
             TrayTip("Settings Updated", "Restarting...", 5)
