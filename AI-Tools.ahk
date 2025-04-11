@@ -82,6 +82,7 @@ PromptHandler(promptName) {
         
         try {
             input := GetSelectedText()
+            input := deIdentify(input)
         } catch as err {
             RestoreCursor()
             _running := false            
@@ -201,7 +202,7 @@ GetSelectedText() {
     BackupClipboard()
     A_Clipboard := ""
     Send("^c")
-    ClipWait(2)
+    ClipWait(1)
     text := A_Clipboard    
     RestoreClipboard()
 
@@ -214,9 +215,7 @@ GetSelectedText() {
         focusedControl := ControlGetFocus("A")  ; Get focused control's identifier
         if focusedControl
             text := ControlGetText(focusedControl, "A")
-    }    
-    
-    text := deIdentify(text)
+    }
 
     ; Final checks:
     if StrLen(text) > 128000
@@ -230,9 +229,15 @@ GetSelectedText() {
 
 deIdentify(medical_history) {
     ; 1. Names
-    medical_history := RegExReplace(medical_history, "[\x{4e00}-\x{9fa5}]{2,4}", "[DE-IDENTIFIED_CHINESE_NAME]") ; Chinese Names
-    medical_history := RegExReplace(medical_history, "\b[A-Z][a-z]+\s[A-Z][a-z]+\b", "[DE-IDENTIFIED_ENGLISH_NAME]") ; English Names (2 words)
-    medical_history := RegExReplace(medical_history, "\b[A-Z][a-z]+\s[A-Z][a-z]+\s[A-Z][a-z]+\b", "[DE-IDENTIFIED_ENGLISH_NAME]") ; English Names (3 words)
+    chinese_surnames := "趙|錢|孫|李|周|吳|鄭|王|馮|陳|褚|衛|蔣|沈|韓|楊|朱|秦|尤|許|何|呂|張|孔|曹|嚴|華|金|魏|陶|姜|戚|謝|鄒|喻|柏|水|竇|章|雲|蘇|潘|葛|奚|范|彭|郎|魯|韋|昌|馬|苗|鳳|花|方|俞|任|袁|柳|鄧|鮑|史|唐|費|廉|岑|薛|雷|賀|倪|湯|滕|殷|羅|畢|郝|安|常|樂|于|時|傅|皮|卞|齊|康|伍|余|元|卜|顧|孟|平|黃|和|穆|蕭|尹|姚|邵|湛|汪|祁|毛|狄|米|貝|明|計|成|戴|談|宋|茅|龐|熊|紀|舒|屈|項|祝|董|梁|杜|阮|閔|賈|樓|顏|郭|梅|盛|林|鍾|徐|邱|駱|高|夏|蔡|田|樊|胡|淩|霍|虞|萬|支|柯|管|盧|莫|經|裘|繆|解|應|宗|丁|宣|賁|鄧|鬱|單|杭|洪|包|諸|左|石|崔|吉|鈕|龔|程|嵇|邢|滑|裴|陸|榮|翁|荀|羊|甄|游|桑|司|韶|桂|車|壽|蓬|燕|楚|閻|尉|商|甘|向|歐|塗|蔚|匡|詹|文|聞|戈|牧|舍|魚|容|暨|居|衡|步|都|耿|滿|弘|國|茅|利|越|盛|寸|冬|區|練|鮮|荊|遊|權|厙|蓋|益|桓|公|仉|督" ; Common Chinese surnames
+    medical_history := RegExReplace(medical_history, "(" chinese_surnames ")[\x{4e00}-\x{9fa5}]{1,2}(?!\x{4e00}-\x{9fa5})", "[DE-IDENTIFIED_CHINESE_NAME]") ; Chinese Names (姓氏 followed by 1-2 characters, not followed by another Chinese character)
+
+    ; 常見醫學術語列表 (需要您自行填充)
+    ;medical_terms := "Oph|Medical Term1|Medical Term2|Another Term|..." ; 請在此處添加您需要排除的醫學術語，用 | 分隔
+
+    ; 排除醫學術語的英文姓名模式
+    ;medical_history := RegExReplace(medical_history, "\b(?!(" . medical_terms . "))[A-Z][a-z]+\s[A-Z][a-z]+\b", "[DE-IDENTIFIED_ENGLISH_NAME]") ; English Names (2 words, not in medical terms)
+    ;medical_history := RegExReplace(medical_history, "\b(?!(" . medical_terms . "))[A-Z][a-z]+\s[A-Z][a-z]+\s[A-Z][a-z]+\b", "[DE-IDENTIFIED_ENGLISH_NAME]") ; English Names (3 words, not in medical terms)
 
     ; 2. National Identification Numbers (國民身分證字號)
     medical_history := RegExReplace(medical_history, "\b[A-Z]{1}[12]\d{8}\b", "[DE-IDENTIFIED_NATIONAL_ID]")
@@ -244,7 +249,7 @@ deIdentify(medical_history) {
     ;medical_history := RegExReplace(medical_history, "\b\d{4}[-/]\d{2}[-/]\d{2}\b", "[DE-IDENTIFIED_BIRTHDATE]") ; YYYY-MM-DD
     ;medical_history := RegExReplace(medical_history, "\b\d{2}[-/]\d{2}[-/]\d{4}\b", "[DE-IDENTIFIED_BIRTHDATE]") ; MM-DD-YYYY
     ;medical_history := RegExReplace(medical_history, "\b\d{2}[-/]\d{2}[-/]\d{2}\b", "[DE-IDENTIFIED_BIRTHDATE]") ; DD-MM-YY (Ambiguous, be careful)
-    medical_history := RegExReplace(medical_history, "\b(民國|西元)\s*\d{2,3}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日\b", "[DE-IDENTIFIED_BIRTHDATE]") ; Chinese format
+    ;medical_history := RegExReplace(medical_history, "\b(民國|西元)\s*\d{2,3}\s*\d{1,2}\s*月\s*\d{1,2}\s*日\b", "[DE-IDENTIFIED_BIRTHDATE]") ; Chinese format
 
     ; 5. Phone Numbers (電話號碼)
     medical_history := RegExReplace(medical_history, "(0\d{1,2}-\d{6,8})", "[DE-IDENTIFIED_PHONE]") ; Landlines
@@ -255,7 +260,7 @@ deIdentify(medical_history) {
     medical_history := RegExReplace(medical_history, "\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", "[DE-IDENTIFIED_EMAIL]")
 
     ; 7. Medical Record Numbers/Patient IDs (病歷號碼/病人ID) - Example patterns, adjust as needed!
-    medical_history := RegExReplace(medical_history, "\b\d{7,10}\b", "[DE-IDENTIFIED_MEDICAL_ID]") ; 7-10 digit number
+    medical_history := RegExReplace(medical_history, "\b\d{7}\b", "[DE-IDENTIFIED_MEDICAL_ID]") ; 7 digit number
     medical_history := RegExReplace(medical_history, "\b[A-Za-z]\d{6,8}\b", "[DE-IDENTIFIED_MEDICAL_ID]") ; Letter followed by 6-8 digits
     medical_history := RegExReplace(medical_history, "\b[A-Za-z]{2}\d{5,7}\b", "[DE-IDENTIFIED_MEDICAL_ID]") ; Two letters followed by 5-7 digits
 
@@ -396,6 +401,42 @@ CallAPI(mode, promptName, input) {
     }
 }
 
+Clean(response_text) {
+    ; remove carriage returns
+    response_text := StrReplace(response_text, "`r", "")          
+        
+    ; Remove leading newlines
+    while SubStr(response_text, 1, 1) == '`n' {
+        response_text := SubStr(response_text, 2)            
+    }
+    
+    ; Remove leading and trailing newlines and spaces
+    response_text := Trim(response_text)
+
+    ; Recursively remove enclosing double quotes
+    while (SubStr(response_text, 1, 1) == '"' && SubStr(response_text, -1) == '"') {
+        response_text := SubStr(response_text, 2, -1)
+        response_text := Trim(response_text)
+    }
+
+    ; Recursively remove enclosing single quotes
+    while (SubStr(response_text, 1, 1) == "'" && SubStr(response_text, -1) == "'") {
+        response_text := SubStr(response_text, 2, -1)
+        response_text := Trim(response_text)
+    }
+
+    ; Recursively remove code block backticks
+    while (SubStr(response_text, 1, 1) == "``" && SubStr(response_text, -1) == "``") {
+        response_text := SubStr(response_text, 2, -1)
+        response_text := Trim(response_text)
+    }
+
+    ; Change to Windows newline character
+    response_text := StrReplace(response_text, "`n", "`r`n")
+
+    return response_text
+}
+
 HandleResponse(response, mode, promptName, input) {
     global _running, _displayResponse, _activeWin, _styleCSS
 
@@ -411,26 +452,18 @@ HandleResponse(response, mode, promptName, input) {
         }
         
         ;; Clean up response text
+        text := Clean(text)
         
-        text := StrReplace(text, "`r", "") ; remove carriage returns        
-        replaceSelected := ToBool(GetSettingFromYAML(promptName, "replace_selected", "true"))        
-        ; TODO: clean text before replaceSelected
-        if not replaceSelected {  ; Append Mode
-            responseStart := GetSettingFromYAML(promptName, "response_start", "")
-            responseEnd := GetSettingFromYAML(promptName, "response_end", "")
+        replaceSelected := ToBool(GetSettingFromYAML(promptName, "replace_selected", "true"))
+        responseStart := GetSettingFromYAML(promptName, "response_start", "")
+        responseEnd := GetSettingFromYAML(promptName, "response_end", "")        
+                
+        if not replaceSelected {            
             text := input . responseStart . text . responseEnd
-        } else {  ; Replace Mode
-            ;# Remove leading newlines
-            while SubStr(text, 1, 1) == '`n' {
-                text := SubStr(text, 2)
-            }
-            text := Trim(text)
-            ;# Remove enclosing quotes
-            if SubStr(text, 1, 1) == '"' and SubStr(text, -1) == '"' {
-                text := SubStr(text, 2, -1)
-            }
+        } else {
+            text := responseStart . text . responseEnd
         }
-
+        
         response_type := GetSettingFromYAML(promptName, "response_type", "popup")
         if _displayResponse or StrLower(response_type) == "popup" {
             MyGui := Gui(, "Response")
@@ -486,10 +519,10 @@ HandleResponse(response, mode, promptName, input) {
 
             ; Set Resize event
             MyGui.OnEvent("Size", Gui_Size)
-        } else {
-            WinActivate(_activeWin)            
+        } else {                        
             BackupClipboard()
-            A_Clipboard := Trim(text, "`n")  ; Remove leading/trailing newlines
+            A_Clipboard := Trim(text, "`r`n")  ; Remove leading/trailing newlines
+            WinActivate(_activeWin)
             Send("^v")
             Sleep 500
             RestoreClipboard()
